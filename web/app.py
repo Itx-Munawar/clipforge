@@ -129,17 +129,13 @@ SCOPES = [
 ]
 
 
-def _get_redirect_uri(request: Request = None) -> str:
-    """Build OAuth redirect URI from the actual request host."""
-    # Allow override via env var
-    override = os.environ.get("OAUTH_REDIRECT_URI")
-    if override:
-        return override
-    if request:
-        host = request.headers.get("host", "clipforge-v4fp.onrender.com")
-        proto = "https" if "render.com" in host or "localhost" not in host else "http"
-        return f"{proto}://{host}/api/channel/callback"
-    return "https://clipforge-v4fp.onrender.com/api/channel/callback"
+REDIRECT_URI = os.environ.get("OAUTH_REDIRECT_URI", "https://clipforge-v4fp.onrender.com/api/channel/callback")
+
+
+@app.get("/api/channel/redirect-uri")
+async def get_redirect_uri():
+    """Return the configured redirect URI so the UI can display it."""
+    return {"redirect_uri": REDIRECT_URI}
 
 
 @app.get("/api/channel/auth-url")
@@ -149,19 +145,18 @@ async def get_auth_url(request: Request):
     if not os.path.exists(secret_path):
         return {"error": "client_secret.json not found — upload it first"}
 
-    redirect_uri = _get_redirect_uri(request)
     from google_auth_oauthlib.flow import Flow
     flow = Flow.from_client_secrets_file(
         secret_path,
         scopes=SCOPES,
-        redirect_uri=redirect_uri,
+        redirect_uri=REDIRECT_URI,
     )
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         prompt="select_account consent",
         include_granted_scopes="true",
     )
-    return {"auth_url": auth_url, "redirect_uri": redirect_uri}
+    return {"auth_url": auth_url, "redirect_uri": REDIRECT_URI}
 
 
 @app.get("/api/channel/callback")
@@ -179,7 +174,7 @@ async def channel_callback(request: Request, code: str = None, error: str = None
         from google_auth_oauthlib.flow import Flow
         from googleapiclient.discovery import build
 
-        redirect_uri = _get_redirect_uri(request)
+        redirect_uri = REDIRECT_URI
         secret_path = os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE)
         flow = Flow.from_client_secrets_file(
             secret_path,
@@ -255,12 +250,11 @@ async def connect_channel(request: Request):
         if not os.path.exists(secret_path):
             return {"connected": False, "error": "Upload client_secret.json first"}
 
-        redirect_uri = _get_redirect_uri(request)
         from google_auth_oauthlib.flow import Flow
         flow = Flow.from_client_secrets_file(
             secret_path,
             scopes=SCOPES,
-            redirect_uri=redirect_uri,
+            redirect_uri=REDIRECT_URI,
         )
         auth_url, _ = flow.authorization_url(
             access_type="offline",

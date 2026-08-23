@@ -388,6 +388,10 @@
                             Upload <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px">client_secret.json</code> to connect your YouTube channel.
                             <br><a href="https://console.cloud.google.com/apis/credentials" target="" style="color:#818cf8">Get it from Google Cloud Console</a>
                         </p>
+                        <div id="redirectUriBox" style="margin-bottom:10px;padding:8px 12px;border-radius:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);font-size:0.78em;color:#fbbf24;line-height:1.6">
+                            ⚠️ Add this redirect URI in Google Cloud Console:<br>
+                            <code id="redirectUriText" style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;color:#e4e4e7;font-size:0.95em;word-break:break-all"></code>
+                        </div>
                         <label for="secretFile" style="display:block;padding:8px 14px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px dashed rgba(255,255,255,0.15);text-align:center;font-size:0.85em;color:#71717a;cursor:pointer;transition:all 0.2s;margin-bottom:8px">
                             📁 Upload client_secret.json
                         </label>
@@ -977,9 +981,19 @@
             } catch(e) {}
         }
 
+        // --- Redirect URI display ---
+        async function loadRedirectUri() {
+            try {
+                const r = await fetch('/api/channel/redirect-uri');
+                const d = await r.json();
+                document.getElementById('redirectUriText').textContent = d.redirect_uri;
+            } catch(e) {}
+        }
+
         // Init
         checkChannel();
         checkCookies();
+        loadRedirectUri();
     </script>
 </body>
 </html>
