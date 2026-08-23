@@ -549,7 +549,6 @@
                     const sr = await fetch('/api/channel/secret');
                     const sd = await sr.json();
                     if (!sd.exists) {
-                        // Auto-expand the secret upload section
                         document.getElementById('secretBody').style.display = 'block';
                         document.getElementById('secretArrow').textContent = '▾';
                         toast('Upload client_secret.json first!', 'error');
@@ -565,6 +564,10 @@
                     if (d.connected) {
                         updateChannelUI(d);
                         toast('Connected: ' + d.title, 'success');
+                        btn.disabled = false;
+                    } else if (d.auth_url) {
+                        // Redirect to Google OAuth consent
+                        window.location.href = d.auth_url;
                     } else {
                         toast(d.error || 'Connection failed', 'error');
                         btn.disabled = false;

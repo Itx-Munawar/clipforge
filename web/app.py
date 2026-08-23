@@ -123,36 +123,70 @@ async def remove_channel_secret():
     return {"exists": False}
 
 
-@app.post("/api/channel/connect")
-async def connect_channel():
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.readonly",
+]
+
+
+@app.get("/api/channel/auth-url")
+async def get_auth_url():
+    """Generate OAuth consent URL for YouTube channel connection."""
+    secret_path = os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE)
+    if not os.path.exists(secret_path):
+        return {"error": "client_secret.json not found — upload it first"}
+
+    from google_auth_oauthlib.flow import Flow
+    flow = Flow.from_client_secrets_file(
+        secret_path,
+        scopes=SCOPES,
+        redirect_uri="https://clipforge-v4fp.onrender.com/api/channel/callback",
+    )
+    auth_url, _ = flow.authorization_url(
+        access_type="offline",
+        prompt="consent",
+        include_granted_scopes="true",
+    )
+    # Cache the flow state so the callback can resume it
+    _pending_flow = {
+        "client_id": flow.client_config.get("client_id", ""),
+        "client_secret": flow.client_config.get("client_secret", ""),
+        "auth_uri": flow.client_config.get("auth_uri", ""),
+        "token_uri": flow.client_config.get("token_uri", ""),
+    }
+    return {"auth_url": auth_url}
+
+
+@app.get("/api/channel/callback")
+async def channel_callback(code: str = None, error: str = None):
+    """Handle OAuth redirect from Google consent screen."""
     global channel_info
+
+    if error:
+        return HTMLResponse(f"<h2>Authorization failed: {error}</h2><p>Close this tab and try again.</p>")
+
+    if not code:
+        return HTMLResponse("<h2>No authorization code received</h2><p>Close this tab and try again.</p>")
+
     try:
-        from auth_helper import get_youtube_service, CLIENT_SECRET_FILE, SCOPES
+        from google_auth_oauthlib.flow import Flow
         from googleapiclient.discovery import build
-        from google.oauth2.credentials import Credentials
-        from google.auth.transport.requests import Request
 
-        TOKEN_FILE = os.path.join(PROJECT_ROOT, "token.json")
-        creds = None
+        secret_path = os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE)
+        flow = Flow.from_client_secrets_file(
+            secret_path,
+            scopes=SCOPES,
+            redirect_uri="https://clipforge-v4fp.onrender.com/api/channel/callback",
+        )
+        flow.fetch_token(code=code)
+        creds = flow.credentials
 
-        if os.path.exists(TOKEN_FILE):
-            creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+        # Save token
+        token_path = os.path.join(PROJECT_ROOT, "token.json")
+        with open(token_path, "w") as f:
+            f.write(creds.to_json())
 
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                from google_auth_oauthlib.flow import InstalledAppFlow
-                if not os.path.exists(os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE)):
-                    return {"connected": False, "error": "client_secret.json not found"}
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE), SCOPES
-                )
-                creds = flow.run_local_server(port=0, prompt="consent")
-
-            with open(TOKEN_FILE, "w") as f:
-                f.write(creds.to_json())
-
+        # Get channel info
         youtube = build("youtube", "v3", credentials=creds)
         result = youtube.channels().list(part="snippet", mine=True).execute()
 
@@ -164,8 +198,68 @@ async def connect_channel():
                 "thumbnail": ch["snippet"]["thumbnails"]["default"]["url"],
                 "channel_id": ch["id"],
             })
-            return channel_info
-        return {"connected": False, "error": "No channel found"}
+            title = ch["snippet"]["title"]
+            return HTMLResponse(f"""
+            <html><body style="font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;background:#09090b;color:#e4e4e7">
+            <div style="text-align:center">
+                <h1 style="font-size:2em">✅ Connected!</h1>
+                <p style="font-size:1.2em;color:#38ef7d">{title}</p>
+                <p style="color:#71717a">You can close this tab and return to ClipForge.</p>
+                <script>setTimeout(() => window.close(), 3000);</script>
+            </div>
+            </body></html>
+            """)
+        else:
+            return HTMLResponse("<h2>No YouTube channel found</h2><p>Make sure your Google account has a YouTube channel.</p>")
+
+    except Exception as e:
+        logger.error(f"OAuth callback error: {e}")
+        return HTMLResponse(f"<h2>Connection failed: {e}</h2><p>Close this tab and try again.</p>")
+
+
+@app.post("/api/channel/connect")
+async def connect_channel():
+    """Check if already connected, otherwise return auth URL."""
+    global channel_info
+    try:
+        from googleapiclient.discovery import build
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+
+        TOKEN_FILE = os.path.join(PROJECT_ROOT, "token.json")
+        if os.path.exists(TOKEN_FILE):
+            creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+            if creds and creds.valid:
+                youtube = build("youtube", "v3", credentials=creds)
+                result = youtube.channels().list(part="snippet", mine=True).execute()
+                if result.get("items"):
+                    ch = result["items"][0]
+                    channel_info.update({
+                        "connected": True,
+                        "title": ch["snippet"]["title"],
+                        "thumbnail": ch["snippet"]["thumbnails"]["default"]["url"],
+                        "channel_id": ch["id"],
+                    })
+                    return channel_info
+
+        # Need OAuth — return auth URL
+        secret_path = os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE)
+        if not os.path.exists(secret_path):
+            return {"connected": False, "error": "Upload client_secret.json first"}
+
+        from google_auth_oauthlib.flow import Flow
+        flow = Flow.from_client_secrets_file(
+            secret_path,
+            scopes=SCOPES,
+            redirect_uri="https://clipforge-v4fp.onrender.com/api/channel/callback",
+        )
+        auth_url, _ = flow.authorization_url(
+            access_type="offline",
+            prompt="consent",
+            include_granted_scopes="true",
+        )
+        return {"connected": False, "auth_url": auth_url}
+
     except Exception as e:
         logger.error(f"Channel connection error: {e}")
         return {"connected": False, "error": str(e)}
