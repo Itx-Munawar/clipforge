@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: clipforge
+    runtime: docker
+    dockerfilePath: Dockerfile
+    envVars:
+      - key: PORT
+        value: 8000
+    plan: free
+    healthCheckPath: /api/health

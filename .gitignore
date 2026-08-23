@@ -1,0 +1,31 @@
+# Dependencies
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Output files
+output/
+temp/
+
+# Auth & secrets
+token.json
+client_secret*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+server.log
+
+# Whisper models
+models/
