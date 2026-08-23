@@ -158,7 +158,7 @@ async def get_auth_url(request: Request):
     )
     auth_url, _ = flow.authorization_url(
         access_type="offline",
-        prompt="consent",
+        prompt="select_account consent",
         include_granted_scopes="true",
     )
     return {"auth_url": auth_url, "redirect_uri": redirect_uri}
@@ -264,7 +264,7 @@ async def connect_channel(request: Request):
         )
         auth_url, _ = flow.authorization_url(
             access_type="offline",
-            prompt="consent",
+            prompt="select_account consent",
             include_granted_scopes="true",
         )
         return {"connected": False, "auth_url": auth_url}
