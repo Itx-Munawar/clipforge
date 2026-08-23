@@ -1,0 +1,14 @@
+__pycache__
+*.pyc
+.git
+.gitignore
+output/
+temp/
+token.json
+client_secret*.json
+.vscode/
+.idea/
+*.md
+LICENSE
+deploy.py
+_render_deploy.py

@@ -374,6 +374,39 @@
                 </div>
             </div>
 
+            <div class="divider"></div>
+
+            <!-- Cookies -->
+            <div class="cookie-section">
+                <div class="cookie-header" onclick="document.getElementById('cookieBody').style.display=document.getElementById('cookieBody').style.display==='none'?'block':'none'" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <label style="margin:0;color:#a1a1aa;font-size:0.82em;font-weight:600;text-transform:uppercase;letter-spacing:0.03em">🍪 YouTube Cookies</label>
+                    <span id="cookieArrow" style="color:#52525b;font-size:0.8em">▸</span>
+                </div>
+                <div id="cookieBody" style="display:none">
+                    <div id="cookieNotLoaded">
+                        <p style="font-size:0.8em;color:#52525b;margin-bottom:10px;line-height:1.5">
+                            Bypass YouTube bot detection with cookies.<br>
+                            <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="" style="color:#818cf8">Get cookies.txt extension</a> → youtube.com → Export
+                        </p>
+                        <!-- File upload -->
+                        <label for="cookieFile" style="display:block;padding:8px 14px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px dashed rgba(255,255,255,0.15);text-align:center;font-size:0.85em;color:#71717a;cursor:pointer;transition:all 0.2s;margin-bottom:8px">
+                            📁 Upload cookies.txt file
+                        </label>
+                        <input type="file" id="cookieFile" accept=".txt" style="display:none" onchange="uploadCookies(this)">
+                        <!-- Or paste text -->
+                        <div style="text-align:center;font-size:0.75em;color:#52525b;margin:4px 0">— or paste cookies below —</div>
+                        <textarea id="cookieText" placeholder="Paste your cookies.txt content here...&#10;&#10;# Netscape HTTP Cookie File&#10;.youtube.com	TRUE	/	FALSE	0	CONSENT	YES+1" style="width:100%;height:100px;padding:8px;border-radius:8px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);color:#e4e4e7;font-family:monospace;font-size:0.72em;resize:vertical;box-sizing:border-box;margin-bottom:8px"></textarea>
+                        <button onclick="pasteCookies()" style="width:100%;padding:6px 12px;border-radius:8px;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.25);color:#818cf8;font-size:0.8em;cursor:pointer;transition:all 0.2s">💾 Save Pasted Cookies</button>
+                    </div>
+                    <div id="cookieLoaded" style="display:none">
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;background:rgba(56,239,125,0.08);border:1px solid rgba(56,239,125,0.2)">
+                            <span style="font-size:0.82em;color:#38ef7d">✅ Cookies loaded</span>
+                            <button onclick="deleteCookies()" style="background:none;border:none;color:#ef4444;font-size:0.75em;cursor:pointer">Remove</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <button class="generate-btn" id="btnGenerate" onclick="startGenerate()">
                 Generate Clips
             </button>
@@ -688,8 +721,78 @@
             window.open('/api/download-all/' + currentJobId, '_blank');
         }
 
+        // --- Cookies ---
+        async function checkCookies() {
+            try {
+                const r = await fetch('/api/cookies');
+                const d = await r.json();
+                if (d.loaded) {
+                    document.getElementById('cookieNotLoaded').style.display = 'none';
+                    document.getElementById('cookieLoaded').style.display = 'block';
+                } else {
+                    document.getElementById('cookieNotLoaded').style.display = 'block';
+                    document.getElementById('cookieLoaded').style.display = 'none';
+                }
+            } catch(e) {}
+        }
+
+        async function uploadCookies(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const fd = new FormData();
+            fd.append('file', file);
+            try {
+                const r = await fetch('/api/cookies', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (d.loaded) {
+                    document.getElementById('cookieNotLoaded').style.display = 'none';
+                    document.getElementById('cookieLoaded').style.display = 'block';
+                    toast('Cookies uploaded! (' + (d.size / 1024).toFixed(1) + ' KB)', 'success');
+                } else {
+                    toast('Upload failed', 'error');
+                }
+            } catch(e) {
+                toast('Upload error: ' + e.message, 'error');
+            }
+            input.value = '';
+        }
+
+        async function pasteCookies() {
+            const text = document.getElementById('cookieText').value.trim();
+            if (!text) { toast('Paste cookie text first', 'error'); return; }
+            try {
+                const r = await fetch('/api/cookies/text', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({cookies: text})
+                });
+                const d = await r.json();
+                if (d.loaded) {
+                    document.getElementById('cookieNotLoaded').style.display = 'none';
+                    document.getElementById('cookieLoaded').style.display = 'block';
+                    document.getElementById('cookieText').value = '';
+                    toast('Cookies saved! (' + (d.size / 1024).toFixed(1) + ' KB)', 'success');
+                } else {
+                    toast('Save failed', 'error');
+                }
+            } catch(e) {
+                toast('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function deleteCookies() {
+            try {
+                await fetch('/api/cookies', { method: 'DELETE' });
+                document.getElementById('cookieNotLoaded').style.display = 'block';
+                document.getElementById('cookieLoaded').style.display = 'none';
+                document.getElementById('cookieText').value = '';
+                toast('Cookies removed', 'success');
+            } catch(e) {}
+        }
+
         // Init
         checkChannel();
+        checkCookies();
     </script>
 </body>
 </html>
