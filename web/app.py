@@ -7,6 +7,7 @@ import uuid
 import asyncio
 import shutil
 import traceback
+import time
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -139,14 +140,65 @@ async def disconnect_channel():
 
 @app.get("/api/cookies")
 async def get_cookies_status():
-    """Check if cookies file exists."""
+    """Check if cookies file exists and parse expiry info."""
     cookies_path = os.path.join(PROJECT_ROOT, "cookies.txt")
     if os.path.exists(cookies_path):
         size = os.path.getsize(cookies_path)
         mtime = os.path.getmtime(cookies_path)
-        from datetime import datetime
+        now = time.time()
+        age_hours = round((now - mtime) / 3600, 1)
         modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
-        return {"loaded": True, "size": size, "modified": modified}
+
+        # Parse Netscape cookie file for expiry timestamps
+        nearest_expiry = None
+        expired_count = 0
+        total_cookies = 0
+        try:
+            with open(cookies_path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    parts = line.split("\t")
+                    if len(parts) >= 5:
+                        try:
+                            exp = int(parts[4])
+                            if exp > 0:
+                                total_cookies += 1
+                                if exp < now:
+                                    expired_count += 1
+                                else:
+                                    if nearest_expiry is None or exp < nearest_expiry:
+                                        nearest_expiry = exp
+                        except (ValueError, IndexError):
+                            pass
+        except Exception:
+            pass
+
+        hours_left = None
+        status = "fresh"
+        if nearest_expiry is not None:
+            hours_left = round((nearest_expiry - now) / 3600, 1)
+            if hours_left <= 0:
+                status = "expired"
+            elif hours_left < 1:
+                status = "expiring_soon"
+            elif hours_left < 6:
+                status = "aging"
+        elif total_cookies > 0 and expired_count == total_cookies:
+            status = "expired"
+            hours_left = 0
+
+        return {
+            "loaded": True,
+            "size": size,
+            "modified": modified,
+            "age_hours": age_hours,
+            "hours_left": hours_left,
+            "status": status,
+            "total_cookies": total_cookies,
+            "expired_cookies": expired_count,
+        }
     return {"loaded": False}
 
 

@@ -399,9 +399,28 @@
                         <button onclick="pasteCookies()" style="width:100%;padding:6px 12px;border-radius:8px;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.25);color:#818cf8;font-size:0.8em;cursor:pointer;transition:all 0.2s">💾 Save Pasted Cookies</button>
                     </div>
                     <div id="cookieLoaded" style="display:none">
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:8px;background:rgba(56,239,125,0.08);border:1px solid rgba(56,239,125,0.2)">
-                            <span style="font-size:0.82em;color:#38ef7d">✅ Cookies loaded</span>
-                            <button onclick="deleteCookies()" style="background:none;border:none;color:#ef4444;font-size:0.75em;cursor:pointer">Remove</button>
+                        <div id="cookieStatusOk" style="padding:8px 12px;border-radius:8px;background:rgba(56,239,125,0.08);border:1px solid rgba(56,239,125,0.2)">
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <span style="font-size:0.82em;color:#38ef7d">✅ Cookies loaded</span>
+                                <button onclick="deleteCookies()" style="background:none;border:none;color:#ef4444;font-size:0.75em;cursor:pointer">Remove</button>
+                            </div>
+                            <div id="cookieExpiryInfo" style="font-size:0.72em;color:#71717a;margin-top:4px"></div>
+                        </div>
+                        <div id="cookieExpiryWarning" style="display:none;padding:8px 12px;border-radius:8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3)">
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <span id="cookieWarningText" style="font-size:0.82em;color:#fbbf24">⚠️ Cookies expiring soon</span>
+                                <button onclick="deleteCookies()" style="background:none;border:none;color:#ef4444;font-size:0.75em;cursor:pointer">Remove</button>
+                            </div>
+                            <div id="cookieWarningDetail" style="font-size:0.72em;color:#a1a1aa;margin-top:4px"></div>
+                            <button onclick="document.getElementById('cookieBody').style.display='block'" style="margin-top:6px;padding:4px 10px;border-radius:6px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.25);color:#fbbf24;font-size:0.75em;cursor:pointer">🔄 Re-upload Cookies</button>
+                        </div>
+                        <div id="cookieExpiredBanner" style="display:none;padding:8px 12px;border-radius:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3)">
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <span style="font-size:0.82em;color:#ef4444">❌ Cookies expired</span>
+                                <button onclick="deleteCookies()" style="background:none;border:none;color:#ef4444;font-size:0.75em;cursor:pointer">Remove</button>
+                            </div>
+                            <div style="font-size:0.72em;color:#a1a1aa;margin-top:4px">Upload fresh cookies to continue downloading.</div>
+                            <button onclick="document.getElementById('cookieBody').style.display='block'" style="margin-top:6px;padding:4px 10px;border-radius:6px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.25);color:#ef4444;font-size:0.75em;cursor:pointer">🔄 Upload Fresh Cookies</button>
                         </div>
                     </div>
                 </div>
@@ -722,19 +741,73 @@
         }
 
         // --- Cookies ---
+        let lastCookieStatus = 'unknown';
+
         async function checkCookies() {
             try {
                 const r = await fetch('/api/cookies');
                 const d = await r.json();
-                if (d.loaded) {
-                    document.getElementById('cookieNotLoaded').style.display = 'none';
-                    document.getElementById('cookieLoaded').style.display = 'block';
-                } else {
+                const ok = document.getElementById('cookieStatusOk');
+                const warn = document.getElementById('cookieExpiryWarning');
+                const expired = document.getElementById('cookieExpiredBanner');
+                const expiryInfo = document.getElementById('cookieExpiryInfo');
+
+                if (!d.loaded) {
                     document.getElementById('cookieNotLoaded').style.display = 'block';
                     document.getElementById('cookieLoaded').style.display = 'none';
+                    lastCookieStatus = 'missing';
+                    return;
+                }
+
+                document.getElementById('cookieNotLoaded').style.display = 'none';
+                document.getElementById('cookieLoaded').style.display = 'block';
+
+                // Reset all sub-states
+                ok.style.display = 'none';
+                warn.style.display = 'none';
+                expired.style.display = 'none';
+
+                const status = d.status || 'fresh';
+                const hrs = d.hours_left;
+                const age = d.age_hours;
+                const total = d.total_cookies || 0;
+                const exp = d.expired_cookies || 0;
+
+                let ageText = age !== undefined ? 'Age: ' + age + 'h' : '';
+                let expiryText = '';
+                if (hrs !== null && hrs !== undefined) {
+                    if (hrs > 24) expiryText = 'Expires in ' + Math.round(hrs/24) + 'd ' + Math.round(hrs%24) + 'h';
+                    else if (hrs > 1) expiryText = 'Expires in ' + Math.round(hrs) + 'h';
+                    else expiryText = 'Expires in ' + Math.round(hrs * 60) + 'min';
+                }
+                let cookieCount = total > 0 ? total + ' cookies' + (exp > 0 ? ' (' + exp + ' expired)' : '') : '';
+                let infoParts = [ageText, expiryText, cookieCount].filter(Boolean).join(' · ');
+
+                if (status === 'expired') {
+                    expired.style.display = 'block';
+                    lastCookieStatus = 'expired';
+                    document.getElementById('cookieBody').style.display = 'block';
+                    document.getElementById('cookieArrow').textContent = '▾';
+                    if (typeof toast === 'function') toast('⚠️ Cookies have expired! Upload fresh ones.', 'error');
+                } else if (status === 'expiring_soon' || status === 'aging') {
+                    warn.style.display = 'block';
+                    document.getElementById('cookieWarningText').textContent = status === 'expiring_soon' ? '⚠️ Cookies expiring very soon!' : '⚠️ Cookies aging';
+                    document.getElementById('cookieWarningDetail').textContent = infoParts;
+                    lastCookieStatus = status;
+                    if (lastCookieStatus !== 'expiring_soon' && typeof toast === 'function') toast('Cookies expiring ' + (hrs !== null ? 'in ' + Math.round(hrs*60) + ' min' : 'soon') + ' — re-upload recommended', 'warning');
+                } else {
+                    ok.style.display = 'block';
+                    expiryInfo.textContent = infoParts;
+                    if (lastCookieStatus === 'expired' || lastCookieStatus === 'expiring_soon') {
+                        if (typeof toast === 'function') toast('✅ Fresh cookies loaded!', 'success');
+                    }
+                    lastCookieStatus = 'fresh';
                 }
             } catch(e) {}
         }
+
+        // Auto-check cookies every 30 minutes
+        setInterval(checkCookies, 30 * 60 * 1000);
 
         async function uploadCookies(input) {
             const file = input.files[0];
@@ -745,9 +818,8 @@
                 const r = await fetch('/api/cookies', { method: 'POST', body: fd });
                 const d = await r.json();
                 if (d.loaded) {
-                    document.getElementById('cookieNotLoaded').style.display = 'none';
-                    document.getElementById('cookieLoaded').style.display = 'block';
                     toast('Cookies uploaded! (' + (d.size / 1024).toFixed(1) + ' KB)', 'success');
+                    checkCookies();
                 } else {
                     toast('Upload failed', 'error');
                 }
@@ -768,10 +840,9 @@
                 });
                 const d = await r.json();
                 if (d.loaded) {
-                    document.getElementById('cookieNotLoaded').style.display = 'none';
-                    document.getElementById('cookieLoaded').style.display = 'block';
                     document.getElementById('cookieText').value = '';
                     toast('Cookies saved! (' + (d.size / 1024).toFixed(1) + ' KB)', 'success');
+                    checkCookies();
                 } else {
                     toast('Save failed', 'error');
                 }
@@ -786,6 +857,7 @@
                 document.getElementById('cookieNotLoaded').style.display = 'block';
                 document.getElementById('cookieLoaded').style.display = 'none';
                 document.getElementById('cookieText').value = '';
+                lastCookieStatus = 'missing';
                 toast('Cookies removed', 'success');
             } catch(e) {}
         }
