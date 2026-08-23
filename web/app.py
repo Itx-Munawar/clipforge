@@ -78,6 +78,44 @@ async def get_channel_status():
     return channel_info
 
 
+@app.get("/api/channel/secret")
+async def check_channel_secret():
+    """Check if client_secret.json exists."""
+    secret_path = os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE)
+    return {"exists": os.path.exists(secret_path)}
+
+
+@app.post("/api/channel/secret")
+async def upload_channel_secret(file: UploadFile = File(...)):
+    """Upload client_secret.json for YouTube OAuth."""
+    content = await file.read()
+    try:
+        import json as _json
+        data = _json.loads(content)
+        if "installed" not in data and "web" not in data and "desktop" not in data:
+            raise HTTPException(status_code=400, detail="Invalid OAuth credentials file. Expected 'installed', 'web', or 'desktop' key.")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON file")
+
+    secret_path = os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE)
+    with open(secret_path, "wb") as f:
+        f.write(content)
+    logger.info(f"client_secret.json uploaded: {len(content)} bytes")
+    return {"exists": True, "filename": file.filename}
+
+
+@app.delete("/api/channel/secret")
+async def remove_channel_secret():
+    """Remove client_secret.json."""
+    secret_path = os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE)
+    if os.path.exists(secret_path):
+        os.remove(secret_path)
+    token_path = os.path.join(PROJECT_ROOT, "token.json")
+    if os.path.exists(token_path):
+        os.remove(token_path)
+    return {"exists": False}
+
+
 @app.post("/api/channel/connect")
 async def connect_channel():
     global channel_info

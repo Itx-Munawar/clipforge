@@ -376,6 +376,40 @@
 
             <div class="divider"></div>
 
+            <!-- YouTube Channel Secret -->
+            <div class="channel-secret-section">
+                <div onclick="document.getElementById('secretBody').style.display=document.getElementById('secretBody').style.display==='none'?'block':'none'" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <label style="margin:0;color:#a1a1aa;font-size:0.82em;font-weight:600;text-transform:uppercase;letter-spacing:0.03em">🔐 OAuth Credentials</label>
+                    <span id="secretArrow" style="color:#52525b;font-size:0.8em">▸</span>
+                </div>
+                <div id="secretBody" style="display:none">
+                    <div id="secretNotLoaded">
+                        <p style="font-size:0.8em;color:#52525b;margin-bottom:10px;line-height:1.5">
+                            Upload <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px">client_secret.json</code> to connect your YouTube channel.
+                            <br><a href="https://console.cloud.google.com/apis/credentials" target="" style="color:#818cf8">Get it from Google Cloud Console</a>
+                        </p>
+                        <label for="secretFile" style="display:block;padding:8px 14px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px dashed rgba(255,255,255,0.15);text-align:center;font-size:0.85em;color:#71717a;cursor:pointer;transition:all 0.2s;margin-bottom:8px">
+                            📁 Upload client_secret.json
+                        </label>
+                        <input type="file" id="secretFile" accept=".json" style="display:none" onchange="uploadSecret(this)">
+                        <div style="text-align:center;font-size:0.75em;color:#52525b;margin:4px 0">— or paste JSON below —</div>
+                        <textarea id="secretText" placeholder='Paste client_secret.json content here...' style="width:100%;height:80px;padding:8px;border-radius:8px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);color:#e4e4e7;font-family:monospace;font-size:0.72em;resize:vertical;box-sizing:border-box;margin-bottom:8px"></textarea>
+                        <button onclick="pasteSecret()" style="width:100%;padding:6px 12px;border-radius:8px;background:rgba(129,140,248,0.15);border:1px solid rgba(129,140,248,0.25);color:#818cf8;font-size:0.8em;cursor:pointer;transition:all 0.2s">💾 Save Credentials</button>
+                    </div>
+                    <div id="secretLoaded" style="display:none">
+                        <div style="padding:8px 12px;border-radius:8px;background:rgba(56,239,125,0.08);border:1px solid rgba(56,239,125,0.2)">
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <span style="font-size:0.82em;color:#38ef7d">✅ Credentials ready</span>
+                                <button onclick="removeSecret()" style="background:none;border:none;color:#ef4444;font-size:0.75em;cursor:pointer">Remove</button>
+                            </div>
+                            <div style="font-size:0.72em;color:#71717a;margin-top:4px">You can now connect your YouTube channel.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
             <!-- Cookies -->
             <div class="cookie-section">
                 <div class="cookie-header" onclick="document.getElementById('cookieBody').style.display=document.getElementById('cookieBody').style.display==='none'?'block':'none'" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -479,15 +513,14 @@
         // Toggle upload options
         document.getElementById('toggleUpload').addEventListener('click', function() {
             document.getElementById('uploadOpts').style.display = this.classList.contains('on') ? 'block' : 'none';
-        });
-
-        // --- Channel ---
+        });        // --- Channel ---
         async function checkChannel() {
             try {
                 const r = await fetch('/api/channel/status');
                 const d = await r.json();
                 updateChannelUI(d);
             } catch(e) {}
+            checkSecret();
         }
 
         function updateChannelUI(info) {
@@ -507,9 +540,23 @@
             }
         }
 
+
         async function toggleChannel() {
             const btn = document.getElementById('channelBtn');
             if (btn.classList.contains('connect')) {
+                // First check if secret file exists
+                try {
+                    const sr = await fetch('/api/channel/secret');
+                    const sd = await sr.json();
+                    if (!sd.exists) {
+                        // Auto-expand the secret upload section
+                        document.getElementById('secretBody').style.display = 'block';
+                        document.getElementById('secretArrow').textContent = '▾';
+                        toast('Upload client_secret.json first!', 'error');
+                        return;
+                    }
+                } catch(e) {}
+
                 btn.disabled = true;
                 btn.textContent = 'Connecting...';
                 try {
@@ -533,6 +580,71 @@
                 updateChannelUI({ connected: false });
                 toast('Channel disconnected', 'success');
             }
+        }
+
+        // --- OAuth Secret ---
+        async function checkSecret() {
+            try {
+                const r = await fetch('/api/channel/secret');
+                const d = await r.json();
+                document.getElementById('secretNotLoaded').style.display = d.exists ? 'none' : 'block';
+                document.getElementById('secretLoaded').style.display = d.exists ? 'block' : 'none';
+            } catch(e) {}
+        }
+
+        async function uploadSecret(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const fd = new FormData();
+            fd.append('file', file);
+            try {
+                const r = await fetch('/api/channel/secret', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (d.exists) {
+                    toast('Credentials uploaded!', 'success');
+                    checkSecret();
+                } else {
+                    toast(d.detail || 'Upload failed', 'error');
+                }
+            } catch(e) {
+                toast('Upload error: ' + e.message, 'error');
+            }
+            input.value = '';
+        }
+
+        async function pasteSecret() {
+            const text = document.getElementById('secretText').value.trim();
+            if (!text) { toast('Paste the JSON content first', 'error'); return; }
+            // Validate it's valid JSON
+            try { JSON.parse(text); } catch(e) {
+                toast('Invalid JSON — paste the full client_secret.json content', 'error');
+                return;
+            }
+            const blob = new Blob([text], { type: 'application/json' });
+            const file = new File([blob], 'client_secret.json', { type: 'application/json' });
+            const fd = new FormData();
+            fd.append('file', file);
+            try {
+                const r = await fetch('/api/channel/secret', { method: 'POST', body: fd });
+                const d = await r.json();
+                if (d.exists) {
+                    document.getElementById('secretText').value = '';
+                    toast('Credentials saved!', 'success');
+                    checkSecret();
+                } else {
+                    toast(d.detail || 'Save failed', 'error');
+                }
+            } catch(e) {
+                toast('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function removeSecret() {
+            try {
+                const r = await fetch('/api/channel/secret', { method: 'DELETE' });
+                toast('Credentials removed', 'success');
+                checkSecret();
+            } catch(e) {}
         }
 
         // --- Toast ---
