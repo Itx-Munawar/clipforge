@@ -48,7 +48,10 @@ class YouTubeShortsGUI:
 
         self.is_running = False
         self.stop_flag = False
+        self.channel_connected = False
+        self.channel_title = ""
 
+        self._check_channel()
         self._build_ui()
 
     def _setup_styles(self):
@@ -201,8 +204,75 @@ class YouTubeShortsGUI:
         ttk.Label(info_frame, text="Model: tiny=fastest, base=balanced, small=better, medium=best",
                   style="Sub.TLabel").pack(anchor="w")
 
+    def _check_channel(self):
+        """Check if YouTube channel is already connected."""
+        token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "token.json")
+        if not os.path.exists(token_path):
+            return
+        try:
+            from google.oauth2.credentials import Credentials
+            from google.auth.transport.requests import Request
+            from googleapiclient.discovery import build
+
+            SCOPES = [
+                "https://www.googleapis.com/auth/youtube.upload",
+                "https://www.googleapis.com/auth/youtube.readonly",
+            ]
+            creds = Credentials.from_authorized_user_file(token_path, SCOPES)
+            if creds and creds.valid:
+                youtube = build("youtube", "v3", credentials=creds)
+                result = youtube.channels().list(part="snippet", mine=True).execute()
+                if result.get("items"):
+                    ch = result["items"][0]
+                    self.channel_connected = True
+                    self.channel_title = ch["snippet"]["title"]
+            elif creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+                with open(token_path, "w") as f:
+                    f.write(creds.to_json())
+                youtube = build("youtube", "v3", credentials=creds)
+                result = youtube.channels().list(part="snippet", mine=True).execute()
+                if result.get("items"):
+                    ch = result["items"][0]
+                    self.channel_connected = True
+                    self.channel_title = ch["snippet"]["title"]
+        except Exception:
+            pass
+
     def _build_upload_tab(self, parent):
         """Build the Upload tab."""
+        # Channel connection
+        channel_frame = ttk.LabelFrame(parent, text="YouTube Channel")
+        channel_frame.pack(fill="x", padx=10, pady=10)
+
+        ch_row = ttk.Frame(channel_frame)
+        ch_row.pack(fill="x", padx=10, pady=8)
+
+        self.channel_status_var = tk.StringVar(
+            value=f"✅ Connected: {self.channel_title}" if self.channel_connected else "❌ Not connected"
+        )
+        self.channel_status_label = ttk.Label(ch_row, textvariable=self.channel_status_var)
+        self.channel_status_label.pack(side="left")
+
+        self.connect_btn = tk.Button(
+            ch_row, text="Connect YouTube", font=("Segoe UI", 10, "bold"),
+            bg="#89b4fa", fg="#1e1e2e", activebackground="#74c7ec",
+            relief="flat", padx=15, pady=5, command=self._on_connect
+        )
+        self.connect_btn.pack(side="right")
+
+        self.disconnect_btn = tk.Button(
+            ch_row, text="Disconnect", font=("Segoe UI", 10),
+            bg="#45475a", fg="#cdd6f4", activebackground="#585b70",
+            relief="flat", padx=10, pady=5, command=self._on_disconnect
+        )
+        self.disconnect_btn.pack(side="right", padx=(0, 10))
+
+        if self.channel_connected:
+            self.disconnect_btn.pack(side="right", padx=(0, 10))
+        else:
+            self.disconnect_btn.pack_forget()
+
         # Upload settings
         upload_frame = ttk.LabelFrame(parent, text="Upload Settings")
         upload_frame.pack(fill="x", padx=10, pady=10)
@@ -314,6 +384,73 @@ class YouTubeShortsGUI:
         self.stop_flag = True
         self._log("Stopping...")
         self._set_status("Stopping...")
+
+    def _on_connect(self):
+        """Handle Connect YouTube button click."""
+        secret_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "client_secret.json")
+        if not os.path.exists(secret_path):
+            messagebox.showerror(
+                "Setup Required",
+                "client_secret.json not found.\n\n"
+                "1. Go to Google Cloud Console\n"
+                "2. Create OAuth 2.0 Client ID (Desktop app)\n"
+                "3. Download JSON and save as client_secret.json"
+            )
+            return
+
+        self.connect_btn.configure(state="disabled", text="Connecting...")
+        self._set_status("Opening browser for Google sign-in...")
+        thread = threading.Thread(target=self._run_connect, daemon=True)
+        thread.start()
+
+    def _run_connect(self):
+        """Run OAuth flow in background thread."""
+        try:
+            from google_auth_oauthlib.flow import InstalledAppFlow
+
+            SCOPES = [
+                "https://www.googleapis.com/auth/youtube.upload",
+                "https://www.googleapis.com/auth/youtube.readonly",
+            ]
+            secret_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "client_secret.json")
+            token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "token.json")
+
+            flow = InstalledAppFlow.from_client_secrets_file(secret_path, SCOPES)
+            creds = flow.run_local_server(port=0, prompt="consent")
+
+            with open(token_path, "w") as f:
+                f.write(creds.to_json())
+
+            from googleapiclient.discovery import build
+            youtube = build("youtube", "v3", credentials=creds)
+            result = youtube.channels().list(part="snippet", mine=True).execute()
+
+            if result.get("items"):
+                ch = result["items"][0]
+                self.channel_connected = True
+                self.channel_title = ch["snippet"]["title"]
+                self.root.after(0, lambda: self.channel_status_var.set(f"✅ Connected: {self.channel_title}"))
+                self.root.after(0, lambda: self.disconnect_btn.pack(side="right", padx=(0, 10)))
+                self.root.after(0, lambda: self._set_status(f"Connected: {self.channel_title}"))
+            else:
+                self.root.after(0, lambda: messagebox.showwarning("Warning", "No YouTube channel found for this account."))
+
+        except Exception as e:
+            self.root.after(0, lambda: messagebox.showerror("Connection Failed", str(e)))
+            self.root.after(0, lambda: self._set_status("Connection failed", error=True))
+        finally:
+            self.root.after(0, lambda: self.connect_btn.configure(state="normal", text="Connect YouTube"))
+
+    def _on_disconnect(self):
+        """Handle Disconnect button click."""
+        token_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "token.json")
+        if os.path.exists(token_path):
+            os.remove(token_path)
+        self.channel_connected = False
+        self.channel_title = ""
+        self.channel_status_var.set("❌ Not connected")
+        self.disconnect_btn.pack_forget()
+        self._set_status("Channel disconnected")
 
     def _finish(self, success=True, msg="Done"):
         """Reset UI after operation."""
