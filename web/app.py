@@ -26,6 +26,8 @@ logger = logging.getLogger("shorts-maker")
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
+CLIENT_SECRET_FILE = "client_secret.json"
+
 app = FastAPI(title="ClipForge - YouTube Shorts Maker", version="2.0")
 
 # CORS
@@ -88,14 +90,19 @@ async def check_channel_secret():
 @app.post("/api/channel/secret")
 async def upload_channel_secret(file: UploadFile = File(...)):
     """Upload client_secret.json for YouTube OAuth."""
-    content = await file.read()
     try:
-        import json as _json
-        data = _json.loads(content)
-        if "installed" not in data and "web" not in data and "desktop" not in data:
-            raise HTTPException(status_code=400, detail="Invalid OAuth credentials file. Expected 'installed', 'web', or 'desktop' key.")
+        content = await file.read()
+        data = json.loads(content)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON file")
+        raise HTTPException(status_code=400, detail="Invalid JSON file — could not parse it")
+
+    # Accept any valid JSON with OAuth keys
+    valid_keys = {"installed", "web", "desktop"}
+    if not valid_keys.intersection(data.keys()):
+        raise HTTPException(
+            status_code=400,
+            detail=f"File is valid JSON but doesn't look like OAuth credentials. Expected one of: {', '.join(valid_keys)}"
+        )
 
     secret_path = os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE)
     with open(secret_path, "wb") as f:
@@ -254,11 +261,10 @@ async def upload_cookies(file: UploadFile = File(None)):
 
 
 @app.post("/api/cookies/text")
-async def upload_cookies_text():
+async def upload_cookies_text(request: Request):
     """Paste cookie text directly (Netscape cookie format)."""
-    import json as _json
-    body = await Request.body()
-    data = _json.loads(body)
+    body = await request.body()
+    data = json.loads(body)
     text = data.get("cookies", "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="No cookie text provided")
