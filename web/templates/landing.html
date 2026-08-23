@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClipForge — AI YouTube Shorts Maker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: #09090b;
+            color: #e4e4e7;
+            overflow-x: hidden;
+        }
+
+        /* Nav */
+        nav {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+            padding: 16px 32px;
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(9,9,11,0.8);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .logo {
+            font-size: 1.4em; font-weight: 800;
+            background: linear-gradient(135deg, #818cf8, #c084fc);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .nav-links { display: flex; gap: 24px; align-items: center; }
+        .nav-links a {
+            color: #a1a1aa; text-decoration: none; font-size: 0.95em;
+            transition: color 0.2s;
+        }
+        .nav-links a:hover { color: #e4e4e7; }
+        .btn-nav {
+            padding: 10px 22px; border-radius: 8px; font-weight: 600; font-size: 0.9em;
+            background: linear-gradient(135deg, #818cf8, #c084fc);
+            color: white; text-decoration: none; border: none; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-nav:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(129,140,248,0.3); }
+
+        /* Hero */
+        .hero {
+            min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center;
+            padding: 120px 20px 80px;
+            position: relative;
+        }
+        .hero::before {
+            content: '';
+            position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+            width: 600px; height: 600px;
+            background: radial-gradient(circle, rgba(129,140,248,0.15) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 6px 16px; border-radius: 999px;
+            background: rgba(129,140,248,0.1); border: 1px solid rgba(129,140,248,0.2);
+            color: #818cf8; font-size: 0.85em; font-weight: 500;
+            margin-bottom: 24px;
+        }
+        .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #38ef7d; }
+        .hero h1 {
+            font-size: clamp(2.5em, 6vw, 4.5em); font-weight: 800;
+            line-height: 1.1; margin-bottom: 20px;
+            max-width: 800px;
+        }
+        .hero h1 span {
+            background: linear-gradient(135deg, #818cf8, #c084fc, #f472b6);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .hero p {
+            font-size: 1.2em; color: #71717a; max-width: 600px;
+            line-height: 1.6; margin-bottom: 36px;
+        }
+        .hero-btns { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+        .btn-primary {
+            padding: 16px 36px; border-radius: 12px; font-weight: 700; font-size: 1.1em;
+            background: linear-gradient(135deg, #818cf8, #c084fc);
+            color: white; text-decoration: none; border: none; cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(129,140,248,0.4); }
+        .btn-secondary {
+            padding: 16px 36px; border-radius: 12px; font-weight: 700; font-size: 1.1em;
+            background: transparent; border: 1px solid #333; color: #e4e4e7;
+            text-decoration: none; cursor: pointer; transition: all 0.3s;
+        }
+        .btn-secondary:hover { border-color: #818cf8; color: #818cf8; }
+
+        /* Features */
+        .features {
+            padding: 100px 32px;
+            max-width: 1200px; margin: 0 auto;
+        }
+        .features h2 {
+            text-align: center; font-size: 2.5em; font-weight: 800;
+            margin-bottom: 16px;
+        }
+        .features .subtitle {
+            text-align: center; color: #71717a; font-size: 1.1em;
+            margin-bottom: 60px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+        .feature-card {
+            background: rgba(24,24,27,0.8);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 16px;
+            padding: 32px;
+            transition: all 0.3s;
+        }
+        .feature-card:hover {
+            border-color: rgba(129,140,248,0.3);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+        }
+        .feature-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5em; margin-bottom: 16px;
+        }
+        .icon-purple { background: rgba(129,140,248,0.15); }
+        .icon-green { background: rgba(56,239,125,0.15); }
+        .icon-pink { background: rgba(244,114,182,0.15); }
+        .icon-yellow { background: rgba(250,204,21,0.15); }
+        .icon-blue { background: rgba(96,165,250,0.15); }
+        .icon-orange { background: rgba(251,146,60,0.15); }
+        .feature-card h3 { font-size: 1.2em; font-weight: 700; margin-bottom: 8px; }
+        .feature-card p { color: #71717a; line-height: 1.6; font-size: 0.95em; }
+
+        /* How it works */
+        .how-it-works {
+            padding: 100px 32px;
+            max-width: 900px; margin: 0 auto;
+        }
+        .how-it-works h2 {
+            text-align: center; font-size: 2.5em; font-weight: 800;
+            margin-bottom: 60px;
+        }
+        .steps { display: flex; flex-direction: column; gap: 40px; }
+        .step {
+            display: flex; gap: 24px; align-items: flex-start;
+        }
+        .step-num {
+            width: 56px; height: 56px; border-radius: 16px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3em; font-weight: 800;
+            background: linear-gradient(135deg, #818cf8, #c084fc);
+            color: white;
+        }
+        .step-content h3 { font-size: 1.3em; font-weight: 700; margin-bottom: 6px; }
+        .step-content p { color: #71717a; line-height: 1.6; }
+
+        /* CTA */
+        .cta {
+            padding: 100px 32px;
+            text-align: center;
+        }
+        .cta-box {
+            max-width: 700px; margin: 0 auto;
+            padding: 60px 40px; border-radius: 24px;
+            background: linear-gradient(135deg, rgba(129,140,248,0.1), rgba(192,132,252,0.1));
+            border: 1px solid rgba(129,140,248,0.2);
+        }
+        .cta-box h2 { font-size: 2.2em; font-weight: 800; margin-bottom: 16px; }
+        .cta-box p { color: #71717a; font-size: 1.1em; margin-bottom: 32px; }
+
+        /* Footer */
+        footer {
+            padding: 40px 32px;
+            text-align: center; color: #52525b; font-size: 0.9em;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+        footer a { color: #818cf8; text-decoration: none; }
+
+        @media (max-width: 768px) {
+            nav { padding: 12px 16px; }
+            .hero { padding: 100px 16px 60px; }
+            .features, .how-it-works, .cta { padding: 60px 16px; }
+            .feature-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="logo">ClipForge</div>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#how">How it Works</a>
+            <a href="/app" class="btn-nav">Open App</a>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="badge"><span class="dot"></span> 100% Free & Open Source</div>
+        <h1>Turn Any YouTube Video Into <span>Viral Shorts</span></h1>
+        <p>AI-powered clip detection, auto-captions, vertical cropping, and one-click upload to YouTube Shorts — all running locally on your machine.</p>
+        <div class="hero-btns">
+            <a href="/app" class="btn-primary">Start Creating →</a>
+            <a href="https://github.com/Itx-Munawar/clipforge" class="btn-secondary" target="_blank">★ Star on GitHub</a>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+        <h2>Everything You Need</h2>
+        <p class="subtitle">No subscriptions, no API limits, no watermarks</p>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="feature-icon icon-purple">🎯</div>
+                <h3>AI Clip Detection</h3>
+                <p>Smart heuristics analyze transcripts to find the most engaging, viral-worthy moments in any video.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon icon-green">📝</div>
+                <h3>Auto Captions</h3>
+                <p>Whisper AI transcribes speech with word-level timestamps and burns perfectly-timed captions into every clip.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon icon-pink">📱</div>
+                <h3>Vertical Cropping</h3>
+                <p>Automatically pads and resizes any video to 9:16 format for Shorts, TikTok, and Reels.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon icon-yellow">⬆️</div>
+                <h3>Auto Upload</h3>
+                <p>Connect your YouTube channel and upload clips directly — schedule posts throughout the day.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon icon-blue">⚡</div>
+                <h3>Lightning Fast</h3>
+                <p>Processes videos locally using FFmpeg and Whisper — no cloud processing, no waiting in queues.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon icon-orange">🔒</div>
+                <h3>100% Private</h3>
+                <p>Everything runs on your machine. Your videos and transcripts never leave your computer.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works" id="how">
+        <h2>How It Works</h2>
+        <div class="steps">
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-content">
+                    <h3>Paste a YouTube URL</h3>
+                    <p>Enter any YouTube video link. The app downloads the video automatically.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-content">
+                    <h3>AI Finds Viral Moments</h3>
+                    <p>Whisper transcribes the audio and our algorithm scores every moment for engagement potential.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-content">
+                    <h3>Captions & Crop</h3>
+                    <p>Each clip is cropped to vertical format with auto-generated, perfectly-timed captions burned in.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">4</div>
+                <div class="step-content">
+                    <h3>Upload or Download</h3>
+                    <p>Preview clips, download them, or connect your YouTube channel to upload directly as Shorts.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="cta">
+        <div class="cta-box">
+            <h2>Ready to Go Viral?</h2>
+            <p>Start turning long videos into Shorts in under 60 seconds.</p>
+            <a href="/app" class="btn-primary">Launch ClipForge →</a>
+        </div>
+    </section>
+
+    <footer>
+        <p>Built with ❤️ by <a href="https://github.com/Itx-Munawar">Itx-Munawar</a> · Open Source on <a href="https://github.com/Itx-Munawar/clipforge">GitHub</a></p>
+    </footer>
+</body>
+</html>
