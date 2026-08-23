@@ -27,50 +27,50 @@ def download_video(url: str, output_dir: str = "temp") -> str:
 
     output_template = os.path.join(output_dir, "%(title)s.%(ext)s")
 
-    cmd = [
-        "yt-dlp",
-        "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-        "--merge-output-format", "mp4",
-        "-o", output_template,
-        "--no-playlist",
-        "--no-warnings",
-        # Workarounds for YouTube bot detection
-        "--extractor-args", "youtube:player_client=web",
-        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        "--extractor-args", "youtube:player_skip=webpage,configs",
-        url
+    # Try multiple player clients — YouTube increasingly blocks the default
+    player_clients = [
+        "web_creator",
+        "mweb",
+        "tv",
+        "web",
+        "android",
     ]
 
-    # Check for cookies file
-    cookies_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
-    if os.path.exists(cookies_file):
-        cmd.insert(-1, "--cookies")
-        cmd.insert(-1, cookies_file)
+    def _build_cmd(player_client: str) -> list[str]:
+        cmd = [
+            "yt-dlp",
+            "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+            "--merge-output-format", "mp4",
+            "-o", output_template,
+            "--no-playlist",
+            "--no-warnings",
+            "--extractor-args", f"youtube:player_client={player_client}",
+            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            url
+        ]
+        # Check for cookies file
+        cookies_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+        if os.path.exists(cookies_file):
+            cmd.insert(-1, "--cookies")
+            cmd.insert(-1, cookies_file)
+        return cmd
+
+    cmd = _build_cmd(player_clients[0])
 
     print(f"Downloading video...")
     result = subprocess.run(cmd, capture_output=True, text=True)
 
-    if result.returncode != 0:
+    # If first attempt fails, try remaining player clients
+    for client in player_clients[1:]:
+        if result.returncode == 0:
+            break
         stderr = result.stderr
-        # If first attempt fails, try alternative client
-        if "Sign in" in stderr or "bot" in stderr.lower():
-            print("Retrying with different extractor...")
-            cmd_alt = [
-                "yt-dlp",
-                "-f", "best[height<=1080]/best",
-                "-o", output_template,
-                "--no-playlist",
-                "--no-warnings",
-                "--extractor-args", "youtube:player_client=android",
-                url
-            ]
-            if os.path.exists(cookies_file):
-                cmd_alt.insert(-1, "--cookies")
-                cmd_alt.insert(-1, cookies_file)
-            result = subprocess.run(cmd_alt, capture_output=True, text=True)
+        print(f"Retrying with player_client={client}... ({stderr[:120]})")
+        cmd = _build_cmd(client)
+        result = subprocess.run(cmd, capture_output=True, text=True)
 
-        if result.returncode != 0:
-            raise Exception(f"Download failed: {result.stderr[:500]}")
+    if result.returncode != 0:
+        raise Exception(f"Download failed: {result.stderr[:500]}")
 
     # Find the downloaded file
     for f in os.listdir(output_dir):
