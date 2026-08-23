@@ -129,36 +129,43 @@ SCOPES = [
 ]
 
 
+def _get_redirect_uri(request: Request = None) -> str:
+    """Build OAuth redirect URI from the actual request host."""
+    # Allow override via env var
+    override = os.environ.get("OAUTH_REDIRECT_URI")
+    if override:
+        return override
+    if request:
+        host = request.headers.get("host", "clipforge-v4fp.onrender.com")
+        proto = "https" if "render.com" in host or "localhost" not in host else "http"
+        return f"{proto}://{host}/api/channel/callback"
+    return "https://clipforge-v4fp.onrender.com/api/channel/callback"
+
+
 @app.get("/api/channel/auth-url")
-async def get_auth_url():
+async def get_auth_url(request: Request):
     """Generate OAuth consent URL for YouTube channel connection."""
     secret_path = os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE)
     if not os.path.exists(secret_path):
         return {"error": "client_secret.json not found — upload it first"}
 
+    redirect_uri = _get_redirect_uri(request)
     from google_auth_oauthlib.flow import Flow
     flow = Flow.from_client_secrets_file(
         secret_path,
         scopes=SCOPES,
-        redirect_uri="https://clipforge-v4fp.onrender.com/api/channel/callback",
+        redirect_uri=redirect_uri,
     )
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         prompt="consent",
         include_granted_scopes="true",
     )
-    # Cache the flow state so the callback can resume it
-    _pending_flow = {
-        "client_id": flow.client_config.get("client_id", ""),
-        "client_secret": flow.client_config.get("client_secret", ""),
-        "auth_uri": flow.client_config.get("auth_uri", ""),
-        "token_uri": flow.client_config.get("token_uri", ""),
-    }
-    return {"auth_url": auth_url}
+    return {"auth_url": auth_url, "redirect_uri": redirect_uri}
 
 
 @app.get("/api/channel/callback")
-async def channel_callback(code: str = None, error: str = None):
+async def channel_callback(request: Request, code: str = None, error: str = None):
     """Handle OAuth redirect from Google consent screen."""
     global channel_info
 
@@ -172,11 +179,12 @@ async def channel_callback(code: str = None, error: str = None):
         from google_auth_oauthlib.flow import Flow
         from googleapiclient.discovery import build
 
+        redirect_uri = _get_redirect_uri(request)
         secret_path = os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE)
         flow = Flow.from_client_secrets_file(
             secret_path,
             scopes=SCOPES,
-            redirect_uri="https://clipforge-v4fp.onrender.com/api/channel/callback",
+            redirect_uri=redirect_uri,
         )
         flow.fetch_token(code=code)
         creds = flow.credentials
@@ -218,13 +226,13 @@ async def channel_callback(code: str = None, error: str = None):
 
 
 @app.post("/api/channel/connect")
-async def connect_channel():
+async def connect_channel(request: Request):
     """Check if already connected, otherwise return auth URL."""
     global channel_info
     try:
         from googleapiclient.discovery import build
         from google.oauth2.credentials import Credentials
-        from google.auth.transport.requests import Request
+        from google.auth.transport.requests import Request as GRequest
 
         TOKEN_FILE = os.path.join(PROJECT_ROOT, "token.json")
         if os.path.exists(TOKEN_FILE):
@@ -247,11 +255,12 @@ async def connect_channel():
         if not os.path.exists(secret_path):
             return {"connected": False, "error": "Upload client_secret.json first"}
 
+        redirect_uri = _get_redirect_uri(request)
         from google_auth_oauthlib.flow import Flow
         flow = Flow.from_client_secrets_file(
             secret_path,
             scopes=SCOPES,
-            redirect_uri="https://clipforge-v4fp.onrender.com/api/channel/callback",
+            redirect_uri=redirect_uri,
         )
         auth_url, _ = flow.authorization_url(
             access_type="offline",
