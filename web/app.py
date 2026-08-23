@@ -58,6 +58,9 @@ app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
 jobs = {}
 channel_info = {"connected": False, "title": "", "thumbnail": "", "channel_id": ""}
 
+# PKCE code verifier storage for OAuth flow (lost between requests)
+oauth_verifiers = {}
+
 
 # --- Pages ----------------------------------------------------------------
 
@@ -151,12 +154,16 @@ async def get_auth_url(request: Request):
         scopes=SCOPES,
         redirect_uri=REDIRECT_URI,
     )
+    verifier_key = uuid.uuid4().hex
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         prompt="select_account consent",
         include_granted_scopes="true",
+        state=verifier_key,
     )
-    return {"auth_url": auth_url, "redirect_uri": REDIRECT_URI}
+    # Store the PKCE code verifier keyed by state so callback can retrieve it
+    oauth_verifiers[verifier_key] = flow.code_verifier
+    return {"auth_url": auth_url, "redirect_uri": REDIRECT_URI, "verifier_key": verifier_key}
 
 
 @app.get("/api/channel/callback")
@@ -181,6 +188,12 @@ async def channel_callback(request: Request, code: str = None, error: str = None
             scopes=SCOPES,
             redirect_uri=redirect_uri,
         )
+        # Retrieve the PKCE code verifier from the auth-url request
+        # Google sends 'state' param back — use it to look up the verifier
+        state = request.query_params.get("state", "")
+        code_verifier = oauth_verifiers.pop(state, None)
+        if code_verifier:
+            flow.code_verifier = code_verifier
         flow.fetch_token(code=code)
         creds = flow.credentials
 
@@ -256,12 +269,15 @@ async def connect_channel(request: Request):
             scopes=SCOPES,
             redirect_uri=REDIRECT_URI,
         )
+        verifier_key = uuid.uuid4().hex
         auth_url, _ = flow.authorization_url(
             access_type="offline",
             prompt="select_account consent",
             include_granted_scopes="true",
+            state=verifier_key,
         )
-        return {"connected": False, "auth_url": auth_url}
+        oauth_verifiers[verifier_key] = flow.code_verifier
+        return {"connected": False, "auth_url": auth_url, "verifier_key": verifier_key}
 
     except Exception as e:
         logger.error(f"Channel connection error: {e}")
