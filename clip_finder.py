@@ -194,8 +194,41 @@ def find_clips(
         if len(clips) >= max_clips:
             break
 
-    # Sort by score
-    clips.sort(key=lambda c: c.score, reverse=True)
+    # If we don't have enough clips, lower threshold and fill with best remaining
+    if len(clips) < max_clips and segments:
+        # Use remaining segments sorted by duration as fallback
+        fallback_segs = sorted(enumerate(scored), key=lambda x: x[1]["score"], reverse=True)
+        for idx, seg in fallback_segs:
+            if len(clips) >= max_clips:
+                break
+            clip_start = seg["start"]
+            clip_end = min(seg["start"] + clip_duration, seg["end"] + 5)
+
+            # Check overlap
+            overlap = False
+            for used_start, used_end in used_ranges:
+                if not (clip_end <= used_start or clip_start >= used_end):
+                    overlap = True
+                    break
+            if overlap:
+                continue
+
+            clip_text = " ".join(
+                s["text"] for s in scored
+                if s["start"] >= clip_start - 0.5 and s["end"] <= clip_end + 0.5
+            )
+            clip = Clip(
+                start=round(clip_start, 2),
+                end=round(clip_end, 2),
+                text=clip_text.strip() or seg["text"],
+                score=seg["score"],
+                reason=seg["reason"] or "fallback"
+            )
+            clips.append(clip)
+            used_ranges.append((clip_start, clip_end))
+
+    # Sort by start time
+    clips.sort(key=lambda c: c.start)
 
     return clips[:max_clips]
 
