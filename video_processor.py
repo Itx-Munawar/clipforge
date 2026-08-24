@@ -15,7 +15,7 @@ class CaptionStyle:
     font_name: str = "Arial"
     outline_color: str = "black"
     outline_width: int = 4
-    position: str = "center"  # "center" or "bottom"
+    position: str = "bottom"  # "center" or "bottom"
     shadow_color: str = "black"
     shadow_offset: int = 3
 
@@ -134,7 +134,7 @@ def build_caption_filter(captions, style=None, offset=0.0, font_path=""):
         bg_color, fg_color = HIGHLIGHT_COLORS[color_idx % len(HIGHLIGHT_COLORS)]
         color_idx += 1
 
-        y_pos = "(h-text_h)/2" if style.position == "center" else "h-text_h-80"
+        y_pos = "(h-text_h)/2" if style.position == "center" else "h*0.88"
         enable = _build_enable(start, end)
 
         # CapCut style: colored box ONLY behind the text + bold white text

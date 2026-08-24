@@ -407,7 +407,7 @@ async def start_generate(
     clips: int = Form(5),
     duration: int = Form(30),
     model: str = Form("base"),
-    caption_pos: str = Form("center"),
+    caption_pos: str = Form("bottom"),
 ):
     if not url or ("youtube.com" not in url and "youtu.be" not in url):
         raise HTTPException(status_code=400, detail="Invalid YouTube URL")
