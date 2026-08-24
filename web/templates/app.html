@@ -541,64 +541,82 @@
         }
 
 
-        async function toggleChannel() {
+        function toggleChannel() {
             const btn = document.getElementById('channelBtn');
             if (btn.classList.contains('connect')) {
-                // First check if secret file exists
-                try {
-                    const sr = await fetch('/api/channel/secret');
-                    const sd = await sr.json();
-                    if (!sd.exists) {
-                        document.getElementById('secretBody').style.display = 'block';
-                        document.getElementById('secretArrow').textContent = '▾';
-                        toast('Upload client_secret.json first!', 'error');
-                        return;
-                    }
-                } catch(e) {}
-
-                btn.disabled = true;
-                btn.textContent = 'Connecting...';
-                try {
-                    const r = await fetch('/api/channel/connect', { method: 'POST' });
-                    const d = await r.json();
-                    if (d.connected) {
-                        updateChannelUI(d);
-                        toast('Connected: ' + d.title, 'success');
-                        btn.disabled = false;
-                    } else if (d.auth_url) {
-                        // Open Google OAuth in new tab
-                        const authTab = window.open(d.auth_url, '_blank');
-                        btn.disabled = false;
-                        btn.textContent = 'Connect YouTube';
-                        toast('Sign in the new tab, then come back here', 'info');
-                        // Poll for connection every 3s while auth tab is open
-                        const poll = setInterval(async () => {
-                            try {
-                                const cr = await fetch('/api/channel/status');
-                                const cd = await cr.json();
-                                if (cd.connected) {
-                                    clearInterval(poll);
-                                    updateChannelUI(cd);
-                                    toast('Connected: ' + cd.title, 'success');
-                                }
-                            } catch(e) {}
-                        }, 3000);
-                        // Stop polling after 2 minutes
-                        setTimeout(() => clearInterval(poll), 120000);
-                    } else {
-                        toast(d.error || 'Connection failed', 'error');
-                        btn.disabled = false;
-                        btn.textContent = 'Connect YouTube';
-                    }
-                } catch(e) {
-                    toast('Connection error: ' + e.message, 'error');
-                    btn.disabled = false;
-                    btn.textContent = 'Connect YouTube';
-                }
+                doConnectChannel(btn);
             } else {
+                doDisconnectChannel(btn);
+            }
+        }
+
+        async function doDisconnectChannel(btn) {
+            try {
                 await fetch('/api/channel/disconnect', { method: 'POST' });
                 updateChannelUI({ connected: false });
                 toast('Channel disconnected', 'success');
+            } catch(e) {
+                toast('Disconnect failed: ' + e.message, 'error');
+            }
+        }
+
+        async function doConnectChannel(btn) {
+            console.log('doConnectChannel called');
+            // First check if secret file exists
+            try {
+                const sr = await fetch('/api/channel/secret');
+                const sd = await sr.json();
+                console.log('Secret exists:', sd.exists);
+                if (!sd.exists) {
+                    document.getElementById('secretBody').style.display = 'block';
+                    document.getElementById('secretArrow').textContent = '▾';
+                    toast('Upload client_secret.json first!', 'error');
+                    return;
+                }
+            } catch(e) {
+                console.error('Secret check error:', e);
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Connecting...';
+            console.log('Calling /api/channel/connect...');
+            try {
+                const r = await fetch('/api/channel/connect', { method: 'POST' });
+                const d = await r.json();
+                console.log('Connect response:', JSON.stringify(d));
+                if (d.connected) {
+                    updateChannelUI(d);
+                    toast('Connected: ' + d.title, 'success');
+                    btn.disabled = false;
+                } else if (d.auth_url) {
+                    console.log('Opening auth URL in new tab:', d.auth_url);
+                    window.open(d.auth_url, '_blank');
+                    btn.disabled = false;
+                    btn.textContent = 'Connect YouTube';
+                    toast('Sign in the new tab, then come back here', 'info');
+                    // Poll for connection every 3s
+                    const poll = setInterval(async () => {
+                        try {
+                            const cr = await fetch('/api/channel/status');
+                            const cd = await cr.json();
+                            if (cd.connected) {
+                                clearInterval(poll);
+                                updateChannelUI(cd);
+                                toast('Connected: ' + cd.title, 'success');
+                            }
+                        } catch(e) {}
+                    }, 3000);
+                    setTimeout(() => clearInterval(poll), 120000);
+                } else {
+                    toast(d.error || 'Connection failed', 'error');
+                    btn.disabled = false;
+                    btn.textContent = 'Connect YouTube';
+                }
+            } catch(e) {
+                console.error('Connect error:', e);
+                toast('Connection error: ' + e.message, 'error');
+                btn.disabled = false;
+                btn.textContent = 'Connect YouTube';
             }
         }
 
