@@ -89,6 +89,28 @@ async def app_page():
 
 @app.get("/api/channel/status")
 async def get_channel_status():
+    global channel_info
+    # Auto-detect connection from saved token on first request
+    if not channel_info["connected"]:
+        try:
+            TOKEN_FILE = os.path.join(PROJECT_ROOT, "token.json")
+            if os.path.exists(TOKEN_FILE):
+                from google.oauth2.credentials import Credentials
+                from googleapiclient.discovery import build
+                creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+                if creds and creds.valid:
+                    youtube = build("youtube", "v3", credentials=creds)
+                    result = youtube.channels().list(part="snippet", mine=True).execute()
+                    if result.get("items"):
+                        ch = result["items"][0]
+                        channel_info.update({
+                            "connected": True,
+                            "title": ch["snippet"]["title"],
+                            "thumbnail": ch["snippet"]["thumbnails"]["default"]["url"],
+                            "channel_id": ch["id"],
+                        })
+        except Exception:
+            pass
     return channel_info
 
 
