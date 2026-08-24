@@ -584,7 +584,19 @@ async def websocket_job(websocket: WebSocket, job_id: str):
 async def list_clips(job_id: str):
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")
-    return {"clips": jobs[job_id]["clips"]}
+    from upload_tracker import get_upload_status
+    clips = jobs[job_id]["clips"]
+    filenames = [c["filename"] for c in clips]
+    statuses = get_upload_status(job_id, filenames)
+    enriched = []
+    for c in clips:
+        info = dict(c)
+        s = statuses.get(c["filename"], {"uploaded": False})
+        info["uploaded"] = s["uploaded"]
+        info["uploaded_at"] = s.get("uploaded_at", "")
+        info["youtube_url"] = s.get("youtube_url", "")
+        enriched.append(info)
+    return {"clips": enriched}
 
 
 @app.get("/api/download/{job_id}/{filename}")
@@ -612,6 +624,7 @@ async def upload_to_youtube(
     schedule: bool = Form(False),
     interval: int = Form(180),
     start_time: Optional[str] = Form(None),
+    pending_only: bool = Form(False),
 ):
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -619,11 +632,28 @@ async def upload_to_youtube(
     if not job["clips"]:
         raise HTTPException(status_code=400, detail="No clips to upload")
 
-    clip_paths = [os.path.join(OUTPUT_DIR, job_id, c["filename"]) for c in job["clips"]]
+    from upload_tracker import get_pending_clips, mark_uploaded_batch
+
+    all_filenames = [c["filename"] for c in job["clips"]]
+    if pending_only:
+        pending = get_pending_clips(job_id, all_filenames)
+        if not pending:
+            return {"status": "all_uploaded", "message": "All clips already uploaded!", "clips": 0}
+        upload_filenames = pending
+    else:
+        upload_filenames = all_filenames
+
+    # Map filenames to clip info
+    filename_to_clip = {c["filename"]: c for c in job["clips"]}
+    clip_paths = [os.path.join(OUTPUT_DIR, job_id, f) for f in upload_filenames]
+    titles = [filename_to_clip[f].get("text", f"Clip {i+1}")[:50] for i, f in enumerate(upload_filenames)]
+
+    job["logs"].append(f"Starting upload of {len(clip_paths)} clips ({'pending only' if pending_only else 'all'})...")
 
     import threading
     def do_upload():
         try:
+            uploaded_files = []
             if schedule:
                 from uploader import schedule_upload_batch
                 start_dt = None
@@ -631,11 +661,17 @@ async def upload_to_youtube(
                     start_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
                 schedule_upload_batch(video_paths=clip_paths, start_time=start_dt,
                                       interval_minutes=interval, output_dir=os.path.join(OUTPUT_DIR, job_id))
+                uploaded_files = upload_filenames
             else:
                 from uploader import upload_short
-                for i, path in enumerate(clip_paths, 1):
-                    upload_short(video_path=path, title=f"Clip {i}", privacy_status=privacy)
-            job["logs"].append("Upload complete!")
+                for i, (path, title) in enumerate(zip(clip_paths, titles), 1):
+                    job["logs"].append(f"  Uploading {i}/{len(clip_paths)}: {title}...")
+                    upload_short(video_path=path, title=title, privacy_status=privacy)
+                    uploaded_files.append(upload_filenames[i-1])
+            # Mark uploaded
+            if uploaded_files:
+                mark_uploaded_batch(job_id, uploaded_files)
+            job["logs"].append(f"Upload complete! {len(uploaded_files)} clips uploaded.")
         except Exception as e:
             job["logs"].append(f"Upload error: {e}")
 

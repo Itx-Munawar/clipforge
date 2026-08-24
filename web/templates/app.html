@@ -493,7 +493,8 @@
                 <div class="clips-header">
                     <h2>Generated Clips</h2>
                     <div class="clips-actions">
-                        <button class="btn-upload" id="btnUpload" onclick="startUpload()" disabled>Upload to YouTube</button>
+                        <button class="btn-upload" id="btnUpload" onclick="startUpload()" disabled>Upload All</button>
+                        <button class="btn-upload" id="btnUploadPending" onclick="startUploadPending()" disabled style="background:rgba(56,239,125,0.15);border-color:rgba(56,239,125,0.3);color:#38ef7d">⏳ Upload Pending</button>
                         <button class="btn-download-all" id="btnDownloadAll" onclick="downloadAll()" disabled>Download All (.zip)</button>
                     </div>
                 </div>
@@ -679,26 +680,38 @@
             if (status) document.getElementById('progressStep').textContent = status;
         }
 
-        // --- Clips ---
-        function showClips(clips) {
+        // --- Clips ---            function showClips(clips) {
             if (!clips || !clips.length) return;
             document.getElementById('welcomeState').style.display = 'none';
             document.getElementById('clipsSection').classList.add('active');
             document.getElementById('btnUpload').disabled = false;
+            document.getElementById('btnUploadPending').disabled = false;
             document.getElementById('btnDownloadAll').disabled = false;
+
+            // Count pending
+            let pendingCount = 0;
+            clips.forEach(c => { if (!c.uploaded) pendingCount++; });
+            const pendingBtn = document.getElementById('btnUploadPending');
+            pendingBtn.textContent = `⏳ Upload Pending (${pendingCount})`;
+            if (pendingCount === 0) pendingBtn.disabled = true;
 
             const list = document.getElementById('clipsList');
             list.innerHTML = '';
             clips.forEach((clip, i) => {
                 const mb = (clip.size / (1024*1024)).toFixed(1);
+                const isUploaded = clip.uploaded;
+                const statusBadge = isUploaded
+                    ? `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:rgba(56,239,125,0.15);color:#38ef7d;font-size:0.72em;font-weight:600;margin-left:6px">✅ Uploaded</span>`
+                    : `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:rgba(251,191,36,0.15);color:#fbbf24;font-size:0.72em;font-weight:600;margin-left:6px">⏳ Pending</span>`;
                 const card = document.createElement('div');
                 card.className = 'clip-card';
+                card.style.opacity = isUploaded ? '0.6' : '1';
                 card.innerHTML = `
                     <div class="clip-preview">
                         <video src="${clip.url}" muted preload="metadata"></video>
                     </div>
                     <div class="clip-meta">
-                        <h4>Clip ${i+1}</h4>
+                        <h4>Clip ${i+1} ${statusBadge}</h4>
                         <div class="clip-stats">
                             <span>${clip.duration}s</span>
                             <span class="score">★ ${clip.score}</span>
@@ -827,31 +840,47 @@
         }
 
         // --- Upload ---
-        async function startUpload() {
+        async function startUpload(pendingOnly) {
             if (!currentJobId) { toast('Generate clips first', 'error'); return; }
             document.getElementById('btnUpload').disabled = true;
-            addLog('Starting upload...', 'info');
+            document.getElementById('btnUploadPending').disabled = true;
+            addLog(pendingOnly ? 'Uploading pending clips...' : 'Uploading all clips...', 'info');
             const fd = new FormData();
             fd.append('privacy', document.getElementById('privacy').value);
             fd.append('schedule', document.getElementById('toggleSchedule').classList.contains('on'));
             fd.append('interval', document.getElementById('interval').value);
+            fd.append('pending_only', pendingOnly ? 'true' : 'false');
             const st = document.getElementById('startTime').value;
             if (st) fd.append('start_time', new Date(st).toISOString());
             try {
                 const r = await fetch('/api/upload/' + currentJobId, { method: 'POST', body: fd });
                 const d = await r.json();
+                if (d.status === 'all_uploaded') { toast(d.message, 'success'); addLog(d.message, 'success'); document.getElementById('btnUpload').disabled = false; document.getElementById('btnUploadPending').disabled = false; return; }
                 addLog('Upload started for ' + d.clips + ' clips', 'success');
                 toast('Upload started!', 'success');
+                // Refresh clip statuses after a delay
+                setTimeout(() => refreshClips(), 3000);
             } catch(e) {
                 addLog('Upload error: ' + e.message, 'error');
                 toast('Upload failed', 'error');
                 document.getElementById('btnUpload').disabled = false;
+                document.getElementById('btnUploadPending').disabled = false;
             }
         }
+        function startUploadPending() { startUpload(true); }
 
         function downloadAll() {
             if (!currentJobId) return;
             window.open('/api/download-all/' + currentJobId, '_blank');
+        }
+
+        async function refreshClips() {
+            if (!currentJobId) return;
+            try {
+                const r = await fetch('/api/clips/' + currentJobId);
+                const d = await r.json();
+                if (d.clips && d.clips.length) showClips(d.clips);
+            } catch(e) {}
         }
 
         // --- Cookies ---
