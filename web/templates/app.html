@@ -296,7 +296,8 @@
                 <span class="dot"></span>
                 <span id="channelLabel">Not connected</span>
             </div>
-            <button class="channel-btn connect" id="channelBtn" onclick="toggleChannel()">Connect YouTube</button>
+            <a class="channel-btn connect" id="channelBtn" href="/api/channel/auth">Connect YouTube</a>
+            <button class="channel-btn disconnect" id="channelBtnDisconnect" onclick="disconnectChannel()" style="display:none">Disconnect</button>
         </div>
     </nav>
 
@@ -521,85 +522,31 @@
                 updateChannelUI(d);
             } catch(e) {}
             checkSecret();
-        }
-
-        function updateChannelUI(info) {
+        }        function updateChannelUI(info) {
             const el = document.getElementById('channelStatus');
             const label = document.getElementById('channelLabel');
-            const btn = document.getElementById('channelBtn');
+            const connectBtn = document.getElementById('channelBtn');
+            const disconnectBtn = document.getElementById('channelBtnDisconnect');
             if (info.connected) {
                 el.classList.add('connected');
                 label.textContent = info.title;
-                btn.textContent = 'Disconnect';
-                btn.className = 'channel-btn disconnect';
+                connectBtn.style.display = 'none';
+                disconnectBtn.style.display = 'inline-block';
             } else {
                 el.classList.remove('connected');
                 label.textContent = 'Not connected';
-                btn.textContent = 'Connect YouTube';
-                btn.className = 'channel-btn connect';
+                connectBtn.style.display = 'inline-block';
+                disconnectBtn.style.display = 'none';
             }
         }
 
-
-        function toggleChannel() {
-            const btn = document.getElementById('channelBtn');
-            if (btn.classList.contains('connect')) {
-                doConnectChannel(btn);
-            } else {
-                doDisconnectChannel(btn);
-            }
-        }
-
-        async function doDisconnectChannel(btn) {
+        async function disconnectChannel() {
             try {
                 await fetch('/api/channel/disconnect', { method: 'POST' });
                 updateChannelUI({ connected: false });
                 toast('Channel disconnected', 'success');
             } catch(e) {
                 toast('Disconnect failed: ' + e.message, 'error');
-            }
-        }
-
-        async function doConnectChannel(btn) {
-            console.log('doConnectChannel called');
-            // First check if secret file exists
-            try {
-                const sr = await fetch('/api/channel/secret');
-                const sd = await sr.json();
-                console.log('Secret exists:', sd.exists);
-                if (!sd.exists) {
-                    document.getElementById('secretBody').style.display = 'block';
-                    document.getElementById('secretArrow').textContent = '▾';
-                    toast('Upload client_secret.json first!', 'error');
-                    return;
-                }
-            } catch(e) {
-                console.error('Secret check error:', e);
-            }
-
-            btn.disabled = true;
-            btn.textContent = 'Connecting...';
-            console.log('Calling /api/channel/connect...');
-            try {
-                const r = await fetch('/api/channel/connect', { method: 'POST' });
-                const d = await r.json();
-                console.log('Connect response:', JSON.stringify(d));
-                if (d.connected) {
-                    updateChannelUI(d);
-                    toast('Connected: ' + d.title, 'success');
-                    btn.disabled = false;                    } else if (d.auth_url) {
-                        console.log('Redirecting to auth URL:', d.auth_url);
-                        window.location.href = d.auth_url;
-                } else {
-                    toast(d.error || 'Connection failed', 'error');
-                    btn.disabled = false;
-                    btn.textContent = 'Connect YouTube';
-                }
-            } catch(e) {
-                console.error('Connect error:', e);
-                toast('Connection error: ' + e.message, 'error');
-                btn.disabled = false;
-                btn.textContent = 'Connect YouTube';
             }
         }
 

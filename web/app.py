@@ -172,6 +172,24 @@ async def get_redirect_uri():
     return {"redirect_uri": REDIRECT_URI}
 
 
+@app.get("/api/channel/auth")
+async def channel_auth_direct():
+    """Direct OAuth redirect — click Connect and go straight to Google."""
+    secret_path = os.path.join(PROJECT_ROOT, CLIENT_SECRET_FILE)
+    if not os.path.exists(secret_path):
+        return HTMLResponse("<h2>client_secret.json not found</h2><p>Upload it first in the app.</p>")
+    from google_auth_oauthlib.flow import Flow
+    flow = Flow.from_client_secrets_file(secret_path, scopes=SCOPES, redirect_uri=REDIRECT_URI)
+    auth_url, state = flow.authorization_url(
+        access_type="offline",
+        prompt="select_account consent",
+        include_granted_scopes="true",
+    )
+    oauth_flows[state] = flow
+    from starlette.responses import RedirectResponse
+    return RedirectResponse(url=auth_url)
+
+
 @app.get("/api/channel/auth-url")
 async def get_auth_url(request: Request):
     """Generate OAuth consent URL for YouTube channel connection."""
