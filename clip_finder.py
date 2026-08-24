@@ -233,6 +233,40 @@ def find_clips(
     return clips[:max_clips]
 
 
+def split_sequential_clips(
+    video_duration: float,
+    transcript: list[dict],
+    clip_duration: float = 30.0,
+    max_clips: int = 10,
+) -> list[Clip]:
+    """Split video into sequential clips: 0-30s, 31-60s, 61-90s, etc."""
+    clips = []
+    start = 0.0
+
+    for i in range(max_clips):
+        end = min(start + clip_duration, video_duration)
+        if start >= video_duration:
+            break
+
+        # Collect transcript text for this time range
+        text = " ".join(
+            seg["text"].strip() for seg in transcript
+            if seg.get("start", 0) >= start - 0.5 and seg.get("end", 0) <= end + 0.5
+        )
+
+        clips.append(Clip(
+            start=round(start, 2),
+            end=round(end, 2),
+            text=text.strip(),
+            score=0,
+            reason="sequential",
+        ))
+
+        start = end
+
+    return clips
+
+
 if __name__ == "__main__":
     # Test with sample data
     test_segments = [

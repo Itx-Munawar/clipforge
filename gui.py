@@ -467,7 +467,7 @@ class YouTubeShortsGUI:
         try:
             from downloader import download_video
             from transcriber import transcribe
-            from clip_finder import find_clips
+            from clip_finder import split_sequential_clips
             from video_processor import process_clip, add_subtitles_from_words, CaptionStyle
 
             url = self.url_var.get().strip()
@@ -497,14 +497,17 @@ class YouTubeShortsGUI:
                 self._finish(False, "Stopped")
                 return
 
-            # Step 3: Find clips
-            self.root.after(0, lambda: self._log("Step 3/4: Finding viral moments..."))
-            self.root.after(0, lambda: self._set_status("Finding clips..."))
-            clips = find_clips(
-                segments,
+            # Step 3: Split into sequential clips
+            import subprocess, json as _json
+            self.root.after(0, lambda: self._log("Step 3/4: Splitting into clips..."))
+            self.root.after(0, lambda: self._set_status("Splitting clips..."))
+            probe = subprocess.run(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", video_path],
+                                  capture_output=True, text=True, encoding="utf-8")
+            video_duration = float(_json.loads(probe.stdout)["format"]["duration"])
+            clips = split_sequential_clips(
+                video_duration, segments,
                 clip_duration=self.duration_var.get(),
                 max_clips=self.clips_var.get(),
-                min_score=10.0,
             )
 
             if not clips:

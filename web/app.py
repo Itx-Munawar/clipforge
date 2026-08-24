@@ -441,7 +441,7 @@ def _run_generate(job_id, url, num_clips, duration, model, caption_pos):
     try:
         from downloader import download_video
         from transcriber import transcribe
-        from clip_finder import find_clips
+        from clip_finder import split_sequential_clips
         from video_processor import process_clip, add_subtitles_from_words, CaptionStyle
 
         job["status"] = "running"
@@ -466,7 +466,13 @@ def _run_generate(job_id, url, num_clips, duration, model, caption_pos):
         job["step"] = "Finding viral moments..."
         job["progress"] = 60
         job["logs"].append("Finding viral moments...")
-        clips_list = find_clips(segments, clip_duration=duration, max_clips=num_clips, min_score=10.0)
+        # Get video duration for sequential splitting
+        import subprocess
+        probe = subprocess.run(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", video_path],
+                              capture_output=True, text=True, encoding="utf-8")
+        video_duration = float(json.loads(probe.stdout)["format"]["duration"])
+
+        clips_list = split_sequential_clips(video_duration, segments, clip_duration=duration, max_clips=num_clips)
 
         if not clips_list:
             job["status"] = "failed"
