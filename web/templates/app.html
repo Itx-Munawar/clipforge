@@ -566,8 +566,25 @@
                         toast('Connected: ' + d.title, 'success');
                         btn.disabled = false;
                     } else if (d.auth_url) {
-                        // Redirect to Google OAuth consent
-                        window.location.href = d.auth_url;
+                        // Open Google OAuth in new tab
+                        const authTab = window.open(d.auth_url, '_blank');
+                        btn.disabled = false;
+                        btn.textContent = 'Connect YouTube';
+                        toast('Sign in the new tab, then come back here', 'info');
+                        // Poll for connection every 3s while auth tab is open
+                        const poll = setInterval(async () => {
+                            try {
+                                const cr = await fetch('/api/channel/status');
+                                const cd = await cr.json();
+                                if (cd.connected) {
+                                    clearInterval(poll);
+                                    updateChannelUI(cd);
+                                    toast('Connected: ' + cd.title, 'success');
+                                }
+                            } catch(e) {}
+                        }, 3000);
+                        // Stop polling after 2 minutes
+                        setTimeout(() => clearInterval(poll), 120000);
                     } else {
                         toast(d.error || 'Connection failed', 'error');
                         btn.disabled = false;
