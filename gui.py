@@ -544,7 +544,7 @@ class YouTubeShortsGUI:
 
                 clip_words = [w for w in all_words
                              if w["start"] >= clip.start - 0.5 and w["end"] <= clip.end + 0.5]
-                captions = add_subtitles_from_words(clip_words, words_per_group=4)
+                captions = add_subtitles_from_words(clip_words, words_per_group=1)
                 output_file = os.path.join(output_dir, f"clip_{i:02d}.mp4")
 
                 idx = i

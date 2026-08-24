@@ -78,12 +78,31 @@ def _build_enable(start, end):
     return "between(t\\," + f"{start:.2f}\\,{end:.2f}" + ")"
 
 
+# Vibrant subtitle colors — rotates through these per word
+SUBTITLE_COLORS = [
+    "#FFFF00",  # Yellow
+    "#FF00FF",  # Purple/Magenta
+    "#FFFFFF",  # White
+    "#00FF00",  # Green
+    "#FF4444",  # Red
+    "#00CCFF",  # Cyan
+    "#FF8800",  # Orange
+    "#FF69B4",  # Pink
+    "#7CFC00",  # Lawn Green
+    "#FFD700",  # Gold
+    "#FF1493",  # Deep Pink
+    "#00FF7F",  # Spring Green
+]
+
+
 def build_caption_filter(captions, style=None, offset=0.0, font_path=""):
-    """Build FFmpeg drawtext filter for word-by-word captions."""
+    """Build FFmpeg drawtext filter — word-by-word with mixed colors."""
     if style is None:
         style = CaptionStyle()
 
     filters = []
+    color_idx = 0
+
     for cap in captions:
         start = cap["start"] - offset
         end = cap["end"] - offset
@@ -91,13 +110,17 @@ def build_caption_filter(captions, style=None, offset=0.0, font_path=""):
         if not text.strip():
             continue
 
+        # Pick a rotating color for this word
+        color = SUBTITLE_COLORS[color_idx % len(SUBTITLE_COLORS)]
+        color_idx += 1
+
         y_pos = "(h-text_h)/2" if style.position == "center" else "h-text_h-80"
         enable = _build_enable(start, end)
 
         if font_path:
             f = (f"drawtext=fontfile='{font_path}'"
                  f":text='{text}'"
-                 f":fontcolor={style.font_color}"
+                 f":fontcolor={color}"
                  f":fontsize={style.font_size}"
                  f":borderw={style.outline_width}"
                  f":bordercolor={style.outline_color}"
@@ -106,7 +129,7 @@ def build_caption_filter(captions, style=None, offset=0.0, font_path=""):
                  f":enable='{enable}'")
         else:
             f = (f"drawtext=text='{text}'"
-                 f":fontcolor={style.font_color}"
+                 f":fontcolor={color}"
                  f":fontsize={style.font_size}"
                  f":font='{style.font_name}'"
                  f":borderw={style.outline_width}"
@@ -168,38 +191,18 @@ def process_clip(video_path, start, end, captions, output_path,
     return output_path
 
 
-def add_subtitles_from_words(words, words_per_group=4, max_chars=40):
-    """Group individual words into caption chunks."""
+def add_subtitles_from_words(words, words_per_group=1, max_chars=40):
+    """Create word-by-word captions — each word pops up individually."""
     if not words:
         return []
     captions = []
-    cur_words = []
-    cur_text = ""
-    cur_start = None
-
     for wi in words:
         word = wi["word"].strip()
         if not word:
             continue
-        if len(cur_words) >= words_per_group or len(cur_text) + len(word) > max_chars:
-            if cur_words:
-                captions.append({
-                    "text": cur_text.strip(),
-                    "start": cur_start,
-                    "end": cur_words[-1]["end"],
-                })
-            cur_words = []
-            cur_text = ""
-            cur_start = None
-        cur_words.append(wi)
-        if cur_start is None:
-            cur_start = wi["start"]
-        cur_text += word + " "
-
-    if cur_words:
         captions.append({
-            "text": cur_text.strip(),
-            "start": cur_start,
-            "end": cur_words[-1]["end"],
+            "text": word,
+            "start": wi["start"],
+            "end": wi["end"],
         })
     return captions
