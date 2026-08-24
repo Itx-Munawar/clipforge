@@ -113,10 +113,9 @@ HIGHLIGHT_COLORS = [
 def build_caption_filter(captions, style=None, offset=0.0, font_path=""):
     """Build FFmpeg filters for CapCut-style captions.
     
-    Styles:
-    1. Highlight box: colored background rectangle behind text
-    2. Bold text with outline and shadow
-    3. Word-by-word with mixed colors
+    Each word gets:
+    - Colored highlight box BEHIND the text only (not the whole video)
+    - Bold white text with outline and shadow
     """
     if style is None:
         style = CaptionStyle()
@@ -138,50 +137,36 @@ def build_caption_filter(captions, style=None, offset=0.0, font_path=""):
         y_pos = "(h-text_h)/2" if style.position == "center" else "h-text_h-80"
         enable = _build_enable(start, end)
 
-        if font_path:
-            # CapCut style: highlight box + bold text + shadow
-            # Draw colored rectangle behind text (highlight box effect)
-            box_filter = (
-                f"drawbox=x=(w-iw)/2-12:y={y_pos.replace('text_h', 'ih').replace('(h-ih)/2', '(h-ih)/2')}-8"
-                f":w=iw+24:h=ih+16"
-                f":color={bg_color}@0.85:t=fill"
-                f":enable='{enable}'"
-            )
-            
-            # Main text with outline
-            text_filter = (
-                f"drawtext=fontfile='{font_path}'"
-                f":text='{text}'"
-                f":fontcolor={fg_color}"
-                f":fontsize={style.font_size}"
-                f":borderw={style.outline_width}"
-                f":bordercolor={style.outline_color}"
-                f":shadowcolor=black@0.8"
-                f":shadowx=2"
-                f":shadowy=2"
-                f":x=(w-text_w)/2"
-                f":y={y_pos}"
-                f":enable='{enable}'"
-            )
-            
-            filters.append(box_filter)
-            filters.append(text_filter)
-        else:
-            f = (
-                f"drawtext=text='{text}'"
-                f":fontcolor={fg_color}"
-                f":fontsize={style.font_size}"
-                f":font='{style.font_name}'"
-                f":box=1:boxcolor={bg_color}@0.85:boxborderw=12"
-                f":borderw={style.outline_width}"
-                f":bordercolor={style.outline_color}"
-                f":shadowcolor=black@0.8"
-                f":shadowx=2:shadowy=2"
-                f":x=(w-text_w)/2"
-                f":y={y_pos}"
-                f":enable='{enable}'"
-            )
-            filters.append(f)
+        # CapCut style: colored box ONLY behind the text + bold white text
+        # drawtext box=1 draws a box sized to the text, not the whole frame
+        f = (
+            f"drawtext=fontfile='{font_path}'"
+            f":text='{text}'"
+            f":fontcolor={fg_color}"
+            f":fontsize={style.font_size}"
+            f":box=1:boxcolor={bg_color}@0.85:boxborderw=16"
+            f":borderw={style.outline_width}"
+            f":bordercolor={style.outline_color}"
+            f":shadowcolor=black@0.8"
+            f":shadowx=2:shadowy=2"
+            f":x=(w-text_w)/2"
+            f":y={y_pos}"
+            f":enable='{enable}'"
+        ) if font_path else (
+            f"drawtext=text='{text}'"
+            f":fontcolor={fg_color}"
+            f":fontsize={style.font_size}"
+            f":font='{style.font_name}'"
+            f":box=1:boxcolor={bg_color}@0.85:boxborderw=16"
+            f":borderw={style.outline_width}"
+            f":bordercolor={style.outline_color}"
+            f":shadowcolor=black@0.8"
+            f":shadowx=2:shadowy=2"
+            f":x=(w-text_w)/2"
+            f":y={y_pos}"
+            f":enable='{enable}'"
+        )
+        filters.append(f)
 
     return ",".join(filters)
 
