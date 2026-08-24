@@ -467,10 +467,6 @@
             <button class="generate-btn" id="btnGenerate" onclick="startGenerate()">
                 Generate Clips
             </button>
-
-            <button class="generate-btn" id="btnRecap" onclick="startRecap()" style="background: linear-gradient(135deg, #f59e0b, #ef4444); margin-top: 10px;">
-                🇮🇳 Hindi Recap
-            </button>
         </div>
 
         <!-- Main Content -->
@@ -763,37 +759,6 @@
             }
         }
 
-        async function startRecap() {
-            const url = document.getElementById('url').value.trim();
-            if (!url) { toast('Enter a YouTube URL', 'error'); return; }
-
-            document.getElementById('logPanel').innerHTML = '';
-            document.getElementById('logPanel').classList.remove('active');
-            document.getElementById('clipsSection').classList.remove('active');
-            document.getElementById('welcomeState').style.display = 'none';
-            document.getElementById('btnRecap').disabled = true;
-            document.getElementById('btnGenerate').disabled = true;
-            updateProgress(0, 'Starting Hindi Recap...', 'Preparing...');
-
-            const fd = new FormData();
-            fd.append('url', url);
-            fd.append('voice', 'hi-IN-MadhurNeural');
-            fd.append('chunk_duration', '45');
-            fd.append('model', document.getElementById('model').value);
-
-            try {
-                const r = await fetch('/api/recap', { method: 'POST', body: fd });
-                const d = await r.json();
-                if (d.detail) { toast(d.detail, 'error'); document.getElementById('btnRecap').disabled = false; return; }
-                currentJobId = d.job_id;
-                addLog('Hindi Recap started: ' + currentJobId, 'info');
-                connectWS(currentJobId);
-            } catch(e) {
-                toast('Error: ' + e.message, 'error');
-                document.getElementById('btnRecap').disabled = false;
-            }
-        }
-
         function connectWS(jobId) {
             const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${proto}//${location.host}/ws/job/${jobId}`);
@@ -817,13 +782,11 @@
                     if (d.status === 'completed') {
                         addLog('All done!', 'success');
                         document.getElementById('btnGenerate').disabled = false;
-                        document.getElementById('btnRecap').disabled = false;
                         toast('Clips generated!', 'success');
                         ws.close();
                     } else if (d.status === 'failed') {
                         addLog('Failed: ' + (d.error || 'Unknown'), 'error');
                         document.getElementById('btnGenerate').disabled = false;
-                        document.getElementById('btnRecap').disabled = false;
                         toast('Generation failed', 'error');
                         ws.close();
                     }
@@ -836,7 +799,7 @@
                 pollJob(jobId);
             };
 
-            ws.onclose = () => { document.getElementById('btnGenerate').disabled = false; document.getElementById('btnRecap').disabled = false; };
+            ws.onclose = () => { document.getElementById('btnGenerate').disabled = false; };
         }
 
         function pollJob(jobId) {
@@ -861,7 +824,6 @@
                     if (d.status === 'completed' || d.status === 'failed') {
                         clearInterval(iv);
                         document.getElementById('btnGenerate').disabled = false;
-                        document.getElementById('btnRecap').disabled = false;
                         if (d.status === 'completed') { addLog('Done!', 'success'); toast('Clips generated!', 'success'); }
                         else { addLog('Failed: ' + (d.error||'Unknown'), 'error'); toast('Failed', 'error'); }
                     }
