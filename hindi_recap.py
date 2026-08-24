@@ -40,6 +40,19 @@ async def _generate_tts(text: str, output_path: str, voice: str = "hi-IN-MadhurN
     await communicate.save(output_path)
 
 
+def sanitize_text(text: str) -> str:
+    """Remove characters that break FFmpeg's text rendering."""
+    # Remove problematic Unicode chars: fullwidth forms, box drawing, special symbols
+    text = re.sub(r'[\uff00-\uffef]', '', text)  # Fullwidth forms
+    text = re.sub(r'[│┃┆┇┊┋╎╏]', '|', text)  # Box drawing to simple pipe
+    text = re.sub(r'[\u200b-\u200f\u2028-\u202f\u2060-\u206f]', '', text)  # Invisible chars
+    text = re.sub(r'[\u0300-\u036f]', '', text)  # Combining diacritical marks
+    text = re.sub(r'[♪♫♬🎵🎶]', '', text)  # Music symbols
+    text = re.sub(r'[\u2000-\u206f]', ' ', text)  # General punctuation issues
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
 def chunk_segments(segments: list[dict], chunk_duration: float = 35.0) -> list[dict]:
     """Group transcript segments into scenes of ~chunk_duration seconds."""
     chunks = []
@@ -215,8 +228,14 @@ def generate_recap(
         pct = 30 + (i / len(scenes)) * 20
         _progress(pct, f"Generating audio {i+1}/{len(scenes)}...")
 
+        # Sanitize text for TTS and FFmpeg compatibility
+        clean_text = sanitize_text(scene.hindi_narration)
+        if not clean_text:
+            clean_text = sanitize_text(scene.english_text)
+        scene.hindi_narration = clean_text
+
         audio_path = os.path.join(temp_dir, f"narration_{i:03d}.mp3")
-        asyncio.run(_generate_tts(scene.hindi_narration, audio_path, voice))
+        asyncio.run(_generate_tts(clean_text, audio_path, voice))
         scene.audio_path = audio_path
 
     _progress(55, "Muting original audio...")
