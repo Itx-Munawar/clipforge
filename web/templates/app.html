@@ -310,15 +310,10 @@
                 <input type="url" id="url" placeholder="https://www.youtube.com/watch?v=..." />
             </div>
 
-            <div class="field-row">
-                <div class="field">
-                    <label>Number of Clips</label>
-                    <input type="number" id="numClips" value="5" min="1" max="20" />
-                </div>
-                <div class="field">
-                    <label>Max Duration (sec)</label>
-                    <input type="number" id="maxDuration" value="30" min="5" max="60" />
-                </div>
+            <div class="field">
+                <label>Clip Duration (sec)</label>
+                <input type="number" id="maxDuration" value="30" min="5" max="120" />
+                <div style="font-size:0.72em;color:#a1a1aa;margin-top:4px">Clips auto-calculated: video length ÷ this duration</div>
             </div>
 
             <div class="field-row">
@@ -741,7 +736,7 @@
 
             const fd = new FormData();
             fd.append('url', url);
-            fd.append('clips', document.getElementById('numClips').value);
+            fd.append('clips', '999');
             fd.append('duration', document.getElementById('maxDuration').value);
             fd.append('model', document.getElementById('model').value);
             fd.append('caption_pos', document.getElementById('captionPos').value);

@@ -463,14 +463,15 @@ def _run_generate(job_id, url, num_clips, duration, model, caption_pos):
         with open(os.path.join(output_dir, "transcript.json"), "w", encoding="utf-8") as f:
             json.dump(segments, f, indent=2, ensure_ascii=False)
 
-        job["step"] = "Finding viral moments..."
+        job["step"] = "Splitting into clips..."
         job["progress"] = 60
-        job["logs"].append("Finding viral moments...")
-        # Get video duration for sequential splitting
+        # Get video duration and auto-calculate clip count
         import subprocess
         probe = subprocess.run(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", video_path],
                               capture_output=True, text=True, encoding="utf-8")
         video_duration = float(json.loads(probe.stdout)["format"]["duration"])
+        num_clips = max(1, int(video_duration / duration))
+        job["logs"].append(f"Video: {video_duration:.0f}s → {num_clips} clips of {duration}s each")
 
         clips_list = split_sequential_clips(video_duration, segments, clip_duration=duration, max_clips=num_clips)
 
