@@ -9,13 +9,15 @@ from dataclasses import dataclass
 
 @dataclass
 class CaptionStyle:
-    """Caption formatting options."""
-    font_size: int = 48
+    """Caption formatting options — CapCut modern style."""
+    font_size: int = 62
     font_color: str = "white"
     font_name: str = "Arial"
     outline_color: str = "black"
-    outline_width: int = 3
+    outline_width: int = 4
     position: str = "center"  # "center" or "bottom"
+    shadow_color: str = "black"
+    shadow_offset: int = 3
 
 
 def _setup_font():
@@ -118,12 +120,16 @@ def build_caption_filter(captions, style=None, offset=0.0, font_path=""):
         enable = _build_enable(start, end)
 
         if font_path:
+            # CapCut style: bold text + thick outline + shadow
             f = (f"drawtext=fontfile='{font_path}'"
                  f":text='{text}'"
                  f":fontcolor={color}"
                  f":fontsize={style.font_size}"
                  f":borderw={style.outline_width}"
                  f":bordercolor={style.outline_color}"
+                 f":shadowcolor=black@0.6"
+                 f":shadowx={style.shadow_offset}"
+                 f":shadowy={style.shadow_offset}"
                  f":x=(w-text_w)/2"
                  f":y={y_pos}"
                  f":enable='{enable}'")
@@ -134,6 +140,9 @@ def build_caption_filter(captions, style=None, offset=0.0, font_path=""):
                  f":font='{style.font_name}'"
                  f":borderw={style.outline_width}"
                  f":bordercolor={style.outline_color}"
+                 f":shadowcolor=black@0.6"
+                 f":shadowx={style.shadow_offset}"
+                 f":shadowy={style.shadow_offset}"
                  f":x=(w-text_w)/2"
                  f":y={y_pos}"
                  f":enable='{enable}'")
