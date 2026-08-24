@@ -2,6 +2,15 @@
 
 import os
 import sys
+
+# Force UTF-8 on Windows — must be done before any imports
+os.environ["PYTHONUTF8"] = "1"
+os.environ["PYTHONIOENCODING"] = "utf-8"
+if sys.stdout.encoding != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8")
+if sys.stderr.encoding != "utf-8":
+    sys.stderr.reconfigure(encoding="utf-8")
+
 import time
 import webbrowser
 import threading

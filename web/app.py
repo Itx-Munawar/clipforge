@@ -2,6 +2,15 @@
 
 import os
 import sys
+
+# Force UTF-8 on Windows to prevent charmap encoding errors
+os.environ["PYTHONUTF8"] = "1"
+os.environ["PYTHONIOENCODING"] = "utf-8"
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 import json
 import uuid
 import asyncio

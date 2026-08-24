@@ -201,7 +201,7 @@ def generate_recap(
         "ffprobe", "-v", "quiet", "-print_format", "json",
         "-show_format", video_path
     ]
-    probe_result = subprocess.run(probe_cmd, capture_output=True, text=True)
+    probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, encoding="utf-8")
     video_duration = float(json.loads(probe_result.stdout)["format"]["duration"])
 
     _progress(8, "Chunking transcript into scenes...")
@@ -272,7 +272,7 @@ def generate_recap(
             "ffprobe", "-v", "quiet", "-print_format", "json",
             "-show_format", scene.audio_path
         ]
-        r = subprocess.run(probe_cmd, capture_output=True, text=True)
+        r = subprocess.run(probe_cmd, capture_output=True, text=True, encoding="utf-8")
         audio_dur = float(json.loads(r.stdout)["format"]["duration"])
         narration_parts.append({
             "index": i,
