@@ -33,23 +33,24 @@ class RecapScene:
     audio_path: str = ""
 
 
-async def _generate_tts(text: str, output_path: str, voice: str = "hi-IN-MadhurNeural"):
-    """Generate Hindi TTS audio using edge-tts with retry."""
-    import edge_tts
+def _generate_tts(text: str, output_path: str, voice: str = "hi"):
+    """Generate Hindi TTS audio using gTTS (Google Text-to-Speech)."""
+    from gtts import gTTS
     safe_text = sanitize_text(text)
     if not safe_text.strip():
         safe_text = "Please wait"
 
     for attempt in range(3):
         try:
-            communicate = edge_tts.Communicate(safe_text, voice, rate="-5%", pitch="+2Hz")
-            await communicate.save(output_path)
+            tts = gTTS(text=safe_text, lang="hi")
+            tts.save(output_path)
             return
         except Exception as e:
             if attempt < 2:
-                wait = (attempt + 1) * 3
+                wait = (attempt + 1) * 2
                 print(f"  TTS retry {attempt+1}/3 after {wait}s: {e}")
-                await asyncio.sleep(wait)
+                import time as _time
+                _time.sleep(wait)
             else:
                 raise
 
@@ -257,7 +258,7 @@ def generate_recap(
         scene.hindi_narration = clean_text
 
         audio_path = os.path.join(temp_dir, f"narration_{i:03d}.mp3")
-        asyncio.run(_generate_tts(clean_text, audio_path, voice))
+        _generate_tts(clean_text, audio_path, voice)
         scene.audio_path = audio_path
 
         # Small delay between requests to avoid rate-limiting
