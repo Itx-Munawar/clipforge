@@ -587,26 +587,9 @@
                 if (d.connected) {
                     updateChannelUI(d);
                     toast('Connected: ' + d.title, 'success');
-                    btn.disabled = false;
-                } else if (d.auth_url) {
-                    console.log('Opening auth URL in new tab:', d.auth_url);
-                    window.open(d.auth_url, '_blank');
-                    btn.disabled = false;
-                    btn.textContent = 'Connect YouTube';
-                    toast('Sign in the new tab, then come back here', 'info');
-                    // Poll for connection every 3s
-                    const poll = setInterval(async () => {
-                        try {
-                            const cr = await fetch('/api/channel/status');
-                            const cd = await cr.json();
-                            if (cd.connected) {
-                                clearInterval(poll);
-                                updateChannelUI(cd);
-                                toast('Connected: ' + cd.title, 'success');
-                            }
-                        } catch(e) {}
-                    }, 3000);
-                    setTimeout(() => clearInterval(poll), 120000);
+                    btn.disabled = false;                    } else if (d.auth_url) {
+                        console.log('Redirecting to auth URL:', d.auth_url);
+                        window.location.href = d.auth_url;
                 } else {
                     toast(d.error || 'Connection failed', 'error');
                     btn.disabled = false;
