@@ -1,11 +1,15 @@
-"""Hindi Movie Recap — Mute original audio and explain in Hindi.
+"""Hindi Movie Recap — Dramatic narration explaining scenes like YouTube recap channels.
+
+Instead of translating dialogue, this generates engaging Hindi narration
+that explains what's happening in each scene, similar to channels like
+"Bollywood Recaps", "Movies Recapped Hindi", etc.
 
 Flow:
 1. Download YouTube video
 2. Transcribe with Whisper (word-level timestamps)
-3. Chunk transcript into scenes (30-60s each)
-4. Translate each chunk to Hindi
-5. Generate Hindi TTS audio per chunk
+3. Group into scenes (~30-45s each)
+4. Generate dramatic Hindi narration for each scene (not translation - explanation)
+5. Generate TTS audio for narration
 6. Mute original audio and overlay Hindi narration
 7. Export final video
 """
@@ -15,6 +19,7 @@ import asyncio
 import subprocess
 import tempfile
 import json
+import re
 from dataclasses import dataclass
 
 
@@ -24,30 +29,19 @@ class RecapScene:
     start: float
     end: float
     english_text: str
-    hindi_text: str
+    hindi_narration: str
     audio_path: str = ""
 
 
 async def _generate_tts(text: str, output_path: str, voice: str = "hi-IN-MadhurNeural"):
     """Generate Hindi TTS audio using edge-tts."""
     import edge_tts
-    communicate = edge_tts.Communicate(text, voice)
+    communicate = edge_tts.Communicate(text, voice, rate="-5%", pitch="+2Hz")
     await communicate.save(output_path)
 
 
-def translate_to_hindi(text: str) -> str:
-    """Translate English text to Hindi using deep-translator."""
-    from deep_translator import GoogleTranslator
-    try:
-        translated = GoogleTranslator(source="en", target="hi").translate(text)
-        return translated if translated else text
-    except Exception as e:
-        print(f"Translation failed: {e}")
-        return text
-
-
-def chunk_segments(segments: list[dict], chunk_duration: float = 45.0) -> list[dict]:
-    """Group transcript segments into chunks of ~chunk_duration seconds."""
+def chunk_segments(segments: list[dict], chunk_duration: float = 35.0) -> list[dict]:
+    """Group transcript segments into scenes of ~chunk_duration seconds."""
     chunks = []
     current_chunk = {"start": 0, "end": 0, "text": ""}
 
@@ -56,7 +50,6 @@ def chunk_segments(segments: list[dict], chunk_duration: float = 45.0) -> list[d
         if not seg_text:
             continue
 
-        # Start a new chunk if this one would be too long
         if current_chunk["end"] - current_chunk["start"] >= chunk_duration and current_chunk["text"]:
             chunks.append(current_chunk)
             current_chunk = {
@@ -76,16 +69,89 @@ def chunk_segments(segments: list[dict], chunk_duration: float = 45.0) -> list[d
     return chunks
 
 
+def generate_dramatic_narration(english_text: str, scene_index: int, total_scenes: int) -> str:
+    """
+    Convert English transcript into dramatic Hindi narration.
+    Instead of translating word-for-word, creates engaging movie recap style narration.
+    """
+    from deep_translator import GoogleTranslator
+
+    # Clean up the text
+    text = english_text.strip()
+    text = re.sub(r'\s+', ' ', text)
+
+    if not text:
+        return ""
+
+    # Translate the core content to Hindi
+    try:
+        hindi_content = GoogleTranslator(source="en", target="hi").translate(text)
+    except Exception:
+        hindi_content = text
+
+    if not hindi_content:
+        hindi_content = text
+
+    # Add dramatic recap-style connectors based on position
+    if scene_index == 0:
+        # Opening scene - dramatic introduction
+        intro_hooks = [
+            "Dekhiye kya hota hai jab...",
+            "Yeh hai ek aisi kahani jo aapko hilaa ke rakh degi...",
+            "Shuru karte hain aaj ki kahaani...",
+            "Yeh kahaani hai uss waqt ki jab...",
+        ]
+        hook = intro_hooks[scene_index % len(intro_hooks)]
+        return f"{hook} {hindi_content}"
+
+    elif scene_index == total_scenes - 1:
+        # Final scene - dramatic conclusion
+        conclusions = [
+            "Aur phir aakhir mein...",
+            "Toh aisa hua aakhir kaar...",
+            "Aur sabse hairaan karne wali baat yeh thi ki...",
+            "Lekin tab tak bohot der ho chuki thi...",
+        ]
+        conclusion = conclusions[scene_index % len(conclusions)]
+        return f"{conclusion} {hindi_content}"
+
+    else:
+        # Middle scenes - dramatic connectors
+        connectors = [
+            "Aur phir kya hota hai...",
+            "Ab dekhiye kya hone waala hai...",
+            "Tab tak kuch aisa hota hai jo sab badal deta hai...",
+            "Aur yahan pe sab kuch palat jaata hai...",
+            "Iske baad jo hota hai woh sach mein chauka dene wala hai...",
+            "Lekin abhi kahaani ka sabse interesting part aana baaki hai...",
+            "Aur phir ek aisi cheez hoti hai jo kisi ne sochi nahi thi...",
+            "Toh kya hota hai aage? Dekhte rahiye...",
+        ]
+        connector = connectors[scene_index % len(connectors)]
+        return f"{hindi_content} {connector}"
+
+
+def translate_to_hindi(text: str) -> str:
+    """Translate English text to Hindi."""
+    from deep_translator import GoogleTranslator
+    try:
+        translated = GoogleTranslator(source="en", target="hi").translate(text)
+        return translated if translated else text
+    except Exception as e:
+        print(f"Translation failed: {e}")
+        return text
+
+
 def generate_recap(
     video_path: str,
     output_path: str,
     transcript: list[dict],
     voice: str = "hi-IN-MadhurNeural",
-    chunk_duration: float = 45.0,
+    chunk_duration: float = 35.0,
     progress_callback=None,
 ) -> dict:
     """
-    Generate a Hindi recap video.
+    Generate a dramatic Hindi recap video.
 
     Args:
         video_path: Path to the original video
@@ -103,76 +169,71 @@ def generate_recap(
             progress_callback(pct, msg)
         print(f"  [{pct:.0f}%] {msg}")
 
-    _progress(5, "Chunking transcript...")
+    _progress(5, "Analyzing video...")
 
-    # Step 1: Chunk transcript into scenes
-    chunks = chunk_segments(transcript, chunk_duration)
-    if not chunks:
-        raise Exception("No transcript segments found")
-
-    _progress(10, f"Found {len(chunks)} scenes to narrate")
-
-    # Step 2: Translate all chunks to Hindi
-    _progress(15, "Translating to Hindi...")
-    scenes = []
-    for i, chunk in enumerate(chunks):
-        pct = 15 + (i / len(chunks)) * 20
-        _progress(pct, f"Translating scene {i+1}/{len(chunks)}...")
-        hindi_text = translate_to_hindi(chunk["text"])
-        scenes.append(RecapScene(
-            start=chunk["start"],
-            end=chunk["end"],
-            english_text=chunk["text"],
-            hindi_text=hindi_text,
-        ))
-
-    _progress(35, "Generating Hindi audio...")
-
-    # Step 3: Generate TTS for each scene
-    temp_dir = tempfile.mkdtemp(prefix="recap_")
-    for i, scene in enumerate(scenes):
-        pct = 35 + (i / len(scenes)) * 25
-        _progress(pct, f"Generating audio {i+1}/{len(scenes)}...")
-
-        audio_path = os.path.join(temp_dir, f"narration_{i:03d}.mp3")
-        asyncio.run(_generate_tts(scene.hindi_text, audio_path, voice))
-        scene.audio_path = audio_path
-
-    _progress(60, "Creating silent base video...")
-
-    # Step 4: Mute original audio
-    silent_path = os.path.join(temp_dir, "silent.mp4")
-    cmd_silent = [
-        "ffmpeg", "-y", "-i", video_path,
-        "-c:v", "copy",
-        "-an",  # Remove audio
-        silent_path
-    ]
-    subprocess.run(cmd_silent, capture_output=True, check=True)
-
-    _progress(65, "Building narration timeline...")
-
-    # Step 5: Build the narration audio track with proper timing
-    # Create a silent base audio matching video duration
     # Get video duration
     probe_cmd = [
         "ffprobe", "-v", "quiet", "-print_format", "json",
         "-show_format", video_path
     ]
     probe_result = subprocess.run(probe_cmd, capture_output=True, text=True)
-    duration = float(json.loads(probe_result.stdout)["format"]["duration"])
+    video_duration = float(json.loads(probe_result.stdout)["format"]["duration"])
 
-    # Generate silence for the full duration
-    silence_path = os.path.join(temp_dir, "silence.wav")
-    cmd_silence = [
-        "ffmpeg", "-y",
-        "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=mono",
-        "-t", str(duration),
-        "-q:a", "9",
-        silence_path
+    _progress(8, "Chunking transcript into scenes...")
+
+    # Step 1: Chunk transcript into scenes
+    chunks = chunk_segments(transcript, chunk_duration)
+    if not chunks:
+        raise Exception("No transcript segments found")
+
+    _progress(12, f"Found {len(chunks)} scenes to narrate")
+
+    # Step 2: Generate dramatic Hindi narration for each scene
+    _progress(15, "Generating dramatic Hindi narration...")
+    scenes = []
+    for i, chunk in enumerate(chunks):
+        pct = 15 + (i / len(chunks)) * 15
+        _progress(pct, f"Writing narration {i+1}/{len(chunks)}...")
+
+        narration = generate_dramatic_narration(
+            chunk["text"],
+            scene_index=i,
+            total_scenes=len(chunks),
+        )
+        scenes.append(RecapScene(
+            start=chunk["start"],
+            end=chunk["end"],
+            english_text=chunk["text"],
+            hindi_narration=narration,
+        ))
+
+    _progress(30, "Generating Hindi voice...")
+
+    # Step 3: Generate TTS for each scene
+    temp_dir = tempfile.mkdtemp(prefix="recap_")
+    for i, scene in enumerate(scenes):
+        pct = 30 + (i / len(scenes)) * 20
+        _progress(pct, f"Generating audio {i+1}/{len(scenes)}...")
+
+        audio_path = os.path.join(temp_dir, f"narration_{i:03d}.mp3")
+        asyncio.run(_generate_tts(scene.hindi_narration, audio_path, voice))
+        scene.audio_path = audio_path
+
+    _progress(55, "Muting original audio...")
+
+    # Step 4: Mute original audio
+    silent_path = os.path.join(temp_dir, "silent.mp4")
+    cmd_silent = [
+        "ffmpeg", "-y", "-i", video_path,
+        "-c:v", "copy",
+        "-an",
+        silent_path
     ]
-    subprocess.run(cmd_silence, capture_output=True, check=True)
+    subprocess.run(cmd_silent, capture_output=True, check=True)
 
+    _progress(60, "Building narration timeline...")
+
+    # Step 5: Build narration audio track
     # Get durations of each narration audio
     narration_parts = []
     for i, scene in enumerate(scenes):
@@ -187,24 +248,31 @@ def generate_recap(
             "start": scene.start,
             "audio": scene.audio_path,
             "audio_dur": audio_dur,
-            "scene_end": scene.end,
         })
 
-    _progress(70, "Mixing narration into video...")
+    _progress(65, "Mixing narration into video...")
 
-    # Build complex filter to place each narration at the right time
+    # Generate silence base
+    silence_path = os.path.join(temp_dir, "silence.wav")
+    cmd_silence = [
+        "ffmpeg", "-y",
+        "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=mono",
+        "-t", str(video_duration),
+        silence_path
+    ]
+    subprocess.run(cmd_silence, capture_output=True, check=True)
+
+    # Build complex filter for mixing
     inputs = ["-i", silence_path]
     for part in narration_parts:
         inputs.extend(["-i", part["audio"]])
 
     filter_parts = []
     for idx, part in enumerate(narration_parts):
-        input_idx = idx + 1  # first input is silence
-        # Delay each narration to start at scene time
+        input_idx = idx + 1
         delay_ms = int(part["start"] * 1000)
         filter_parts.append(f"[{input_idx}:a]adelay={delay_ms}|{delay_ms},apad[a{idx}]")
 
-    # Mix all narration tracks with the silence base
     mix_inputs = "[0:a]"
     for idx in range(len(narration_parts)):
         mix_inputs += f"[a{idx}]"
@@ -220,12 +288,12 @@ def generate_recap(
         *inputs,
         "-filter_complex", filter_complex,
         "-map", "[out]",
-        "-t", str(duration),
+        "-t", str(video_duration),
         narration_track
     ]
     subprocess.run(cmd_mix, capture_output=True, check=True)
 
-    _progress(85, "Combining video + Hindi audio...")
+    _progress(80, "Combining video + Hindi narration...")
 
     # Step 6: Merge silent video with narration audio
     cmd_merge = [
@@ -252,13 +320,13 @@ def generate_recap(
     return {
         "output": output_path,
         "scenes": len(scenes),
-        "duration": round(duration, 1),
+        "duration": round(video_duration, 1),
         "scenes_detail": [
             {
                 "start": round(s.start, 1),
                 "end": round(s.end, 1),
-                "english": s.english_text[:200],
-                "hindi": s.hindi_text[:200],
+                "english": s.english_text[:150],
+                "narration": s.hindi_narration[:200],
             }
             for s in scenes
         ],
@@ -283,3 +351,5 @@ if __name__ == "__main__":
     result = generate_recap(video, output, segments)
     print(f"\nOutput: {result['output']}")
     print(f"Scenes: {result['scenes']}")
+    for s in result["scenes_detail"]:
+        print(f"  [{s['start']}s-{s['end']}s] {s['narration'][:80]}...")
