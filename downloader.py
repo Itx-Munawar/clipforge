@@ -44,6 +44,8 @@ def download_video(url: str, output_dir: str = "temp") -> str:
             "-o", output_template,
             "--no-playlist",
             "--no-warnings",
+            "--no-write-subs",
+            "--no-write-auto-subs",
             "--extractor-args", f"youtube:player_client={player_client}",
             "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             url
