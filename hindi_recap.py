@@ -36,19 +36,31 @@ class RecapScene:
 async def _generate_tts(text: str, output_path: str, voice: str = "hi-IN-MadhurNeural"):
     """Generate Hindi TTS audio using edge-tts."""
     import edge_tts
-    communicate = edge_tts.Communicate(text, voice, rate="-5%", pitch="+2Hz")
+    # Double-sanitize: keep only ASCII + Devanagari
+    safe_text = sanitize_text(text)
+    if not safe_text.strip():
+        safe_text = "Please wait"
+    communicate = edge_tts.Communicate(safe_text, voice, rate="-5%", pitch="+2Hz")
     await communicate.save(output_path)
 
 
 def sanitize_text(text: str) -> str:
-    """Remove characters that break FFmpeg's text rendering."""
-    # Remove problematic Unicode chars: fullwidth forms, box drawing, special symbols
-    text = re.sub(r'[\uff00-\uffef]', '', text)  # Fullwidth forms
-    text = re.sub(r'[│┃┆┇┊┋╎╏]', '|', text)  # Box drawing to simple pipe
-    text = re.sub(r'[\u200b-\u200f\u2028-\u202f\u2060-\u206f]', '', text)  # Invisible chars
-    text = re.sub(r'[\u0300-\u036f]', '', text)  # Combining diacritical marks
-    text = re.sub(r'[♪♫♬🎵🎶]', '', text)  # Music symbols
-    text = re.sub(r'[\u2000-\u206f]', ' ', text)  # General punctuation issues
+    """Remove ALL characters outside basic Latin + Devanagari ranges.
+    This prevents any encoding issues on Windows."""
+    result = []
+    for ch in text:
+        cp = ord(ch)
+        # Allow: ASCII printable, Devanagari (Hindi script), common punctuation
+        if (32 <= cp <= 126 or           # ASCII printable
+            0x0900 <= cp <= 0x097F or     # Devanagari (Hindi)
+            0x0980 <= cp <= 0x09FF or     # Bengali (sometimes in Hindi transliteration)
+            0x0A00 <= cp <= 0x0A7F or     # Gurmukhi
+            cp == 0x20 or                 # space
+            cp == 0x0A):                 # newline
+            result.append(ch)
+        else:
+            result.append(' ')  # Replace unknown chars with space
+    text = ''.join(result)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
